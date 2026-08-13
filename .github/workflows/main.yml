@@ -40,7 +40,7 @@ jobs:
       - name: Verify PyWinRT
         shell: pwsh
         run: |
-          python -c "import winrt.windows.foundation; import winrt.windows.foundation.collections; import winrt.windows.media.speechsynthesis; import winrt.windows.storage; import winrt.windows.storage.streams; from winrt.windows.media.speechsynthesis import SpeechSynthesizer; from winrt.windows.storage.streams import DataReader; print('PyWinRT OK')"
+          python -c "import winrt.windows.foundation; import winrt.windows.media.speechsynthesis; import winrt.windows.storage.streams; from winrt.windows.media.speechsynthesis import SpeechSynthesizer; from winrt.windows.storage.streams import DataReader; print('PyWinRT OK')"
 
       - name: Syntax check
         shell: pwsh
