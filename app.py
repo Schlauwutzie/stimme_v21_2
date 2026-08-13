@@ -30,7 +30,7 @@ except Exception:
     WINRT_TTS_AVAILABLE = False
 
 
-APP_NAME = "SchlauWutzie K.I. – Video Studio V21.2 FINAL"
+APP_NAME = "SchlauWutzie K.I. – Video Studio V21.3 FINAL"
 IN_W, IN_H = 720, 1280
 OUT_W, OUT_H = 1080, 1920
 FPS = 30
@@ -553,257 +553,147 @@ def draw_neural_hud(
     amplitude: float,
     t: float,
 ) -> Image.Image:
-    """V21.2: Referenzgetreue, transparente K.I.-Premium-Animation."""
+    """
+    V21.3: overlay-only animation.
 
-    frame = background.convert("RGBA")
-    hud = Image.new("RGBA", frame.size, (0, 0, 0, 0))
-    d = ImageDraw.Draw(hud, "RGBA")
+    The supplied reference artwork is already the complete visual layout.
+    Nothing is redrawn: no second rings, no second text, no second waveform.
+    Existing lower-HUD pixels are gently illuminated according to speech.
+    """
 
-    cx = IN_W // 2
-    cy = IN_H - 165
+    frame = background.convert("RGB")
+    arr = np.asarray(frame).astype(np.float32) / 255.0
+    h, w = arr.shape[:2]
     activity = max(0.0, min(1.0, float(amplitude)))
 
-    # Sehr dezente horizontale Führungslinie.
-    d.line(
-        (108, cy + 98, IN_W - 108, cy + 98),
-        fill=(70, 170, 235, 22),
-        width=1,
+    y0 = int(h * 0.66)
+    y1 = int(h * 0.99)
+    roi = arr[y0:y1].copy()
+
+    r, g, b = roi[..., 0], roi[..., 1], roi[..., 2]
+
+    # Detect the gold/cyan pixels that ALREADY exist in the artwork.
+    gold = np.clip(
+        (r - 0.18) * 1.55
+        + (g - 0.14) * 0.80
+        - b * 0.55,
+        0.0,
+        1.0,
+    )
+    cyan = np.clip(
+        (b - 0.18) * 1.55
+        + (g - 0.16) * 0.48
+        - r * 0.42,
+        0.0,
+        1.0,
     )
 
-    # Sprachreaktiver K.I.-Core.
-    pulse = 1.0 + 0.10 * activity + 0.018 * math.sin(t * 3.0)
-    core_r = int(46 * pulse)
+    hud_mask = np.clip(
+        np.maximum(gold, cyan) * 1.7,
+        0.0,
+        1.0,
+    )[..., None]
 
-    # Konzentrische Ringe wie im Referenzbild.
-    for i in range(7):
-        rr = core_r + 8 + i * 12
-        alpha = 32 + int(activity * 45)
+    # Speech-reactive breathing of the existing graphic.
+    pulse = (
+        0.92
+        + 0.20 * activity
+        + 0.03 * math.sin(t * 3.2)
+    )
 
-        d.ellipse(
-            (cx - rr, cy - rr, cx + rr, cy + rr),
-            outline=(54, 181, 247, alpha),
-            width=2,
+    roi = np.clip(
+        roi * (1.0 + hud_mask * (pulse - 1.0)),
+        0.0,
+        1.0,
+    )
+
+    # Soft moving highlight over the EXISTING HUD.
+    yy, xx = np.mgrid[
+        0:roi.shape[0],
+        0:roi.shape[1],
+    ]
+
+    sweep_x = (
+        (t * 190.0)
+        % max(1, roi.shape[1])
+    )
+
+    sweep = np.exp(
+        -((xx - sweep_x) ** 2)
+        / (2.0 * 30.0 ** 2)
+    )
+
+    sweep *= (
+        0.04
+        + 0.22 * activity
+    )
+
+    roi = np.clip(
+        roi + sweep[..., None] * hud_mask,
+        0.0,
+        1.0,
+    )
+
+    # Very soft glow around the EXISTING center K.I. core.
+    cx = int(w * 0.50)
+    cy = int(h * 0.755)
+
+    gy, gx = np.mgrid[0:h, 0:w]
+    radius = min(w, h) * 0.105
+
+    radial = np.exp(
+        -(
+            (gx - cx) ** 2
+            + (gy - cy) ** 2
         )
-
-        angle = (t * (15 + i * 1.6) + i * 38) % 360
-
-        d.arc(
-            (cx - rr, cy - rr, cx + rr, cy + rr),
-            angle,
-            angle + 75,
-            fill=(255, 195, 82, 85 + int(30 * activity)),
-            width=2,
-        )
-
-        d.arc(
-            (cx - rr, cy - rr, cx + rr, cy + rr),
-            angle + 178,
-            angle + 228,
-            fill=(77, 207, 255, 75 + int(24 * activity)),
-            width=2,
-        )
-
-    # Kleine neuronale Orbitpunkte.
-    nodes = []
-    for i in range(16):
-        angle = i * math.tau / 16 - t * (0.18 + i * 0.004)
-        rr = core_r + 34 + 17 * math.sin(t * 0.9 + i * 0.6)
-
-        x = cx + math.cos(angle) * rr
-        y = cy + math.sin(angle) * rr * 0.72
-        nodes.append((x, y))
-
-        dot = 2.0 + 1.8 * activity
-        d.ellipse(
-            (x - dot, y - dot, x + dot, y + dot),
-            fill=(255, 208, 103, 145 + int(activity * 60)),
-        )
-
-    for i in range(0, len(nodes), 2):
-        x1, y1 = nodes[i]
-        x2, y2 = nodes[(i + 3) % len(nodes)]
-        d.line(
-            (x1, y1, x2, y2),
-            fill=(77, 193, 250, 55 + int(activity * 35)),
-            width=1,
-        )
-
-    # Zentrales Gehirn-/K.I.-Symbol.
-    brain_w, brain_h = 50, 58
-
-    d.ellipse(
-        (
-            cx - brain_w // 2,
-            cy - brain_h // 2,
-            cx + brain_w // 2,
-            cy + brain_h // 2,
-        ),
-        outline=(235, 244, 255, 225),
-        width=2,
+        / (2.0 * radius * radius)
     )
 
-    d.arc(
-        (
-            cx - brain_w // 2,
-            cy - brain_h // 2,
-            cx + 1,
-            cy + brain_h // 2,
-        ),
-        90,
-        270,
-        fill=(255, 202, 91, 245),
-        width=2,
+    radial *= (
+        0.018
+        + 0.075 * activity
     )
 
-    d.arc(
-        (
-            cx - 1,
-            cy - brain_h // 2,
-            cx + brain_w // 2,
-            cy + brain_h // 2,
-        ),
-        270,
-        90,
-        fill=(74, 202, 255, 245),
-        width=2,
+    lower = np.zeros(
+        (h, w),
+        dtype=np.float32,
+    )
+    lower[y0:y1, :] = 1.0
+
+    luminance = np.mean(
+        arr,
+        axis=2,
     )
 
-    d.line(
-        (cx, cy - 25, cx, cy + 25),
-        fill=(255, 255, 255, 120),
-        width=1,
+    existing = np.clip(
+        (luminance - 0.10) * 1.6,
+        0.0,
+        1.0,
     )
 
-    # Kleine Synapsen im Core.
-    for i in range(9):
-        a = i * math.tau / 9 + t * 0.12
-        rr = 14 + 4 * math.sin(t + i)
-        x = cx + math.cos(a) * rr
-        y = cy + math.sin(a) * rr * 0.72
-
-        d.ellipse(
-            (x - 1.8, y - 1.8, x + 1.8, y + 1.8),
-            fill=(255, 215, 120, 170 + int(40 * activity)),
-        )
-
-    # Sprechimpuls läuft vom Core nach außen.
-    if activity > 0.045:
-        phase = (t * 1.7) % 1.0
-        travel = max(0.0, 1.0 - abs(phase - 0.25) / 0.25)
-        rr = int(core_r + 10 + 80 * phase)
-
-        d.ellipse(
-            (cx - rr, cy - rr, cx + rr, cy + rr),
-            outline=(
-                100,
-                221,
-                255,
-                max(15, int(175 * travel * activity)),
-            ),
-            width=2,
-        )
-
-    # Feine, sprachreaktive Waveform.
-    x0 = 120
-    x1 = IN_W - 120
-    base_y = cy + 92
-
-    upper = []
-    lower = []
-
-    for x in range(x0, x1 + 1, 3):
-        u = (x - x0) / float(x1 - x0)
-        envelope = 0.12 + 0.88 * (math.sin(math.pi * u) ** 0.60)
-
-        wave = (
-            0.58 * math.sin(u * 45 + t * 11.0)
-            + 0.25 * math.sin(u * 93 - t * 5.5)
-            + 0.11 * math.sin(u * 177 + t * 4.0)
-        )
-
-        scale = (2.0 + 41.0 * activity) * envelope
-
-        upper.append((x, base_y - wave * scale))
-        lower.append((x, base_y + wave * scale * 0.24))
-
-    d.line(
-        upper,
-        fill=(93, 209, 255, 220),
-        width=max(2, int(2 + 2 * activity)),
+    glow_rgb = np.array(
+        [0.86, 0.94, 1.08],
+        dtype=np.float32,
     )
 
-    d.line(
-        lower,
-        fill=(255, 201, 91, 120),
-        width=1,
+    arr = np.clip(
+        arr
+        + (
+            radial
+            * lower
+            * existing
+        )[..., None]
+        * glow_rgb[None, None, :],
+        0.0,
+        1.0,
     )
 
-    # Gold/Cyan-Endmarker.
-    d.line(
-        (x0 - 18, base_y, x0, base_y),
-        fill=(255, 200, 88, 170),
-        width=2,
+    arr[y0:y1] = roi
+
+    return Image.fromarray(
+        (arr * 255.0).astype(np.uint8),
+        "RGB",
     )
-    d.line(
-        (x1, base_y, x1 + 18, base_y),
-        fill=(77, 202, 255, 170),
-        width=2,
-    )
-
-    # Referenzbeschriftung.
-    small = font(11)
-    medium = font(14, True)
-
-    label_y = cy + 112
-
-    d.line(
-        (cx - 98, label_y, cx - 72, label_y),
-        fill=(255, 196, 83, 130),
-        width=1,
-    )
-    d.line(
-        (cx + 72, label_y, cx + 98, label_y),
-        fill=(77, 202, 255, 130),
-        width=1,
-    )
-
-    d.text(
-        (cx - 46, label_y - 8),
-        "K.I. ONLINE",
-        font=medium,
-        fill=(247, 238, 216, 210),
-    )
-
-    d.text(
-        (cx - 100, label_y + 20),
-        "ANALYSE · DENKEN · VERKNÜPFEN",
-        font=small,
-        fill=(215, 225, 233, 165),
-    )
-
-    for i in range(5):
-        xx = cx - 28 + i * 14
-        yy = label_y + 48
-        alpha = 105 + int(70 * activity) if i < 3 else 60
-
-        d.ellipse(
-            (xx - 1.5, yy - 1.5, xx + 1.5, yy + 1.5),
-            fill=(255, 197, 87, alpha)
-            if i % 2 == 0
-            else (77, 204, 255, alpha),
-        )
-
-    # Premium Glow, bewusst dezent.
-    glow = hud.filter(ImageFilter.GaussianBlur(8))
-    glow2 = hud.filter(ImageFilter.GaussianBlur(2.4))
-
-    return Image.alpha_composite(
-        Image.alpha_composite(
-            Image.alpha_composite(frame, glow),
-            glow2,
-        ),
-        hud,
-    ).convert("RGB")
 
 
 # ---------------------------------------------------------------------------
