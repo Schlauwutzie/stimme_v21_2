@@ -30,7 +30,7 @@ except Exception:
     WINRT_TTS_AVAILABLE = False
 
 
-APP_NAME = "SchlauWutzie K.I. – Video Studio V21.3 FINAL"
+APP_NAME = "SchlauWutzie K.I. – Video Studio V21.5 FINAL"
 IN_W, IN_H = 720, 1280
 OUT_W, OUT_H = 1080, 1920
 FPS = 30
@@ -554,146 +554,148 @@ def draw_neural_hud(
     t: float,
 ) -> Image.Image:
     """
-    V21.3: overlay-only animation.
-
-    The supplied reference artwork is already the complete visual layout.
-    Nothing is redrawn: no second rings, no second text, no second waveform.
-    Existing lower-HUD pixels are gently illuminated according to speech.
+    V21.5:
+    The supplied reference image remains the complete design.
+    Only the two existing waveform/equalizer zones left and right of the
+    K.I. core are animated to the voice. No second core, text or rings.
     """
 
-    frame = background.convert("RGB")
-    arr = np.asarray(frame).astype(np.float32) / 255.0
-    h, w = arr.shape[:2]
-    activity = max(0.0, min(1.0, float(amplitude)))
+    frame = background.convert("RGBA")
+    d = ImageDraw.Draw(frame, "RGBA")
 
-    y0 = int(h * 0.66)
-    y1 = int(h * 0.99)
-    roi = arr[y0:y1].copy()
+    activity = float(np.clip(amplitude, 0.0, 1.0))
 
-    r, g, b = roi[..., 0], roi[..., 1], roi[..., 2]
+    # Reference image is 941 x 1672. These positions are normalized so
+    # the animation follows the artwork rather than drawing a new layout.
+    W, H = frame.size
+    sx = W / 941.0
+    sy = H / 1672.0
 
-    # Detect the gold/cyan pixels that ALREADY exist in the artwork.
-    gold = np.clip(
-        (r - 0.18) * 1.55
-        + (g - 0.14) * 0.80
-        - b * 0.55,
-        0.0,
-        1.0,
-    )
-    cyan = np.clip(
-        (b - 0.18) * 1.55
-        + (g - 0.16) * 0.48
-        - r * 0.42,
-        0.0,
-        1.0,
-    )
+    # Existing waveform band / baseline.
+    base_y = int(1295 * sy)
 
-    hud_mask = np.clip(
-        np.maximum(gold, cyan) * 1.7,
-        0.0,
-        1.0,
-    )[..., None]
-
-    # Speech-reactive breathing of the existing graphic.
-    pulse = (
-        0.92
-        + 0.20 * activity
-        + 0.03 * math.sin(t * 3.2)
-    )
-
-    roi = np.clip(
-        roi * (1.0 + hud_mask * (pulse - 1.0)),
-        0.0,
-        1.0,
-    )
-
-    # Soft moving highlight over the EXISTING HUD.
-    yy, xx = np.mgrid[
-        0:roi.shape[0],
-        0:roi.shape[1],
+    # Left and right waveform zones. The center K.I. core is intentionally
+    # untouched.
+    zones = [
+        (int(78 * sx), int(365 * sx), -1),
+        (int(576 * sx), int(865 * sx), 1),
     ]
 
-    sweep_x = (
-        (t * 190.0)
-        % max(1, roi.shape[1])
-    )
+    # Softly suppress ONLY the old static gold waveform pixels in the narrow
+    # animated bands, so the new motion is visible without creating a second
+    # interface.
+    overlay = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    od = ImageDraw.Draw(overlay, "RGBA")
 
-    sweep = np.exp(
-        -((xx - sweep_x) ** 2)
-        / (2.0 * 30.0 ** 2)
-    )
-
-    sweep *= (
-        0.04
-        + 0.22 * activity
-    )
-
-    roi = np.clip(
-        roi + sweep[..., None] * hud_mask,
-        0.0,
-        1.0,
-    )
-
-    # Very soft glow around the EXISTING center K.I. core.
-    cx = int(w * 0.50)
-    cy = int(h * 0.755)
-
-    gy, gx = np.mgrid[0:h, 0:w]
-    radius = min(w, h) * 0.105
-
-    radial = np.exp(
-        -(
-            (gx - cx) ** 2
-            + (gy - cy) ** 2
+    for x0, x1, _side in zones:
+        od.rectangle(
+            (x0, base_y - int(70 * sy),
+             x1, base_y + int(72 * sy)),
+            fill=(0, 0, 0, 42),
         )
-        / (2.0 * radius * radius)
+
+    frame = Image.alpha_composite(frame, overlay)
+    d = ImageDraw.Draw(frame, "RGBA")
+
+    # Build an audio-reactive equalizer. It occupies the same two visual
+    # waveform regions as the reference artwork.
+    bars_per_side = 38
+
+    for x0, x1, side in zones:
+        span = max(1, x1 - x0)
+        step = span / bars_per_side
+
+        for i in range(bars_per_side):
+            cx = int(x0 + (i + 0.5) * step)
+
+            # A smooth pseudo-spectrum: central bars taller, edges shorter,
+            # with motion derived from the actual voice amplitude.
+            u = (i + 0.5) / bars_per_side
+            envelope = 0.24 + 0.76 * math.sin(math.pi * u) ** 0.65
+
+            wave_a = 0.55 * math.sin(
+                i * 1.71 + t * 10.0
+            )
+            wave_b = 0.30 * math.sin(
+                i * 3.17 - t * 6.4
+            )
+            wave_c = 0.15 * math.sin(
+                i * 5.61 + t * 3.8
+            )
+
+            variation = 0.50 + 0.50 * (
+                wave_a + wave_b + wave_c
+            )
+
+            height = (
+                5
+                + 74
+                * activity
+                * envelope
+                * max(0.12, min(1.0, variation))
+            )
+
+            # Keep the bars visibly moving even on ordinary speech.
+            height += (
+                4
+                * math.sin(
+                    t * 5.0
+                    + i * 0.35
+                )
+                * (0.2 + activity)
+            )
+
+            height = max(3.0, height)
+
+            # Thin premium bars.
+            half_w = max(1, int(1.3 * sx))
+
+            # Gold core line with cyan edge, matching the reference.
+            d.rectangle(
+                (
+                    cx - half_w,
+                    int(base_y - height),
+                    cx + half_w,
+                    int(base_y + height * 0.12),
+                ),
+                fill=(255, 202, 93, 205),
+            )
+
+            # Tiny cyan highlight on every few bars.
+            if i % 3 == 0:
+                d.line(
+                    (
+                        cx,
+                        int(base_y - height * 0.82),
+                        cx,
+                        int(base_y + height * 0.08),
+                    ),
+                    fill=(92, 213, 255, 190),
+                    width=1,
+                )
+
+            # Small peak point for stronger speech moments.
+            if activity > 0.38 and i % 4 == 0:
+                peak_y = int(base_y - height)
+                d.ellipse(
+                    (
+                        cx - 2,
+                        peak_y - 2,
+                        cx + 2,
+                        peak_y + 2,
+                    ),
+                    fill=(255, 232, 169, 220),
+                )
+
+    # Voice-reactive glow ONLY in the two animated zones.
+    glow = frame.filter(ImageFilter.GaussianBlur(6))
+    frame = Image.blend(
+        frame,
+        glow,
+        0.10 + 0.14 * activity,
     )
 
-    radial *= (
-        0.018
-        + 0.075 * activity
-    )
-
-    lower = np.zeros(
-        (h, w),
-        dtype=np.float32,
-    )
-    lower[y0:y1, :] = 1.0
-
-    luminance = np.mean(
-        arr,
-        axis=2,
-    )
-
-    existing = np.clip(
-        (luminance - 0.10) * 1.6,
-        0.0,
-        1.0,
-    )
-
-    glow_rgb = np.array(
-        [0.86, 0.94, 1.08],
-        dtype=np.float32,
-    )
-
-    arr = np.clip(
-        arr
-        + (
-            radial
-            * lower
-            * existing
-        )[..., None]
-        * glow_rgb[None, None, :],
-        0.0,
-        1.0,
-    )
-
-    arr[y0:y1] = roi
-
-    return Image.fromarray(
-        (arr * 255.0).astype(np.uint8),
-        "RGB",
-    )
+    return frame.convert("RGB")
 
 
 # ---------------------------------------------------------------------------
