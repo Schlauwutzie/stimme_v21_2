@@ -268,7 +268,16 @@ def _find_stefan():
     )
 
 
-async def _tts_helper_async(
+def _describe_exception(exc: Exception) -> str:
+    """Return a useful diagnostic instead of the unhelpful 'None'."""
+    parts = [f"{type(exc).__name__}: {exc!s}"]
+    winerror = getattr(exc, "winerror", None)
+    if winerror is not None:
+        parts.append(f"WinError/HRESULT: {winerror}")
+    return " | ".join(parts)
+
+
+def _tts_helper_sync(
     text: str,
     output_path: str,
     status_path: str,
@@ -292,7 +301,6 @@ async def _tts_helper_async(
             if names
             else "keine OneCore-Stimmen"
         )
-
         raise RuntimeError(
             "Microsoft Stefan wurde von Windows nicht gefunden.\n\n"
             "Es wird absichtlich keine Ersatzstimme verwendet.\n\n"
@@ -311,13 +319,25 @@ async def _tts_helper_async(
     try:
         synthesizer.voice = voice
 
-        stream = await synthesizer.synthesize_text_to_stream_async(
-            text
-        )
+        # PyWinRT 3.2+ exposes IAsyncOperation.get(). The helper runs
+        # in a separate non-GUI process, so .get() is appropriate here.
+        operation = synthesizer.synthesize_text_to_stream_async(text)
+        stream = operation.get()
+
+        if stream is None:
+            raise RuntimeError(
+                "Windows hat keinen Speech-Synthese-Stream zurückgegeben."
+            )
+
+        size = int(getattr(stream, "size", 0) or 0)
+        if size <= 0:
+            raise RuntimeError(
+                "StefanM hat einen leeren Speech-Synthese-Stream zurückgegeben."
+            )
 
         _status_write(
             Path(status_path),
-            "StefanM-Audio wird gespeichert …",
+            f"StefanM-Audio wird gespeichert ({size} Bytes) …",
         )
 
         reader = DataReader(
@@ -325,21 +345,34 @@ async def _tts_helper_async(
         )
 
         try:
+            loaded = reader.load_async(size).get()
+            if not loaded:
+                raise RuntimeError(
+                    "StefanM-Audio konnte nicht aus dem Windows-Stream gelesen werden."
+                )
+
+            data = bytearray(int(loaded))
+            reader.read_bytes(data)
+
             with open(output_path, "wb") as output:
-                while True:
-                    count = await reader.load_async(65536)
+                output.write(data)
 
-                    if not count:
-                        break
-
-                    data = bytearray(count)
-                    reader.read_bytes(data)
-                    output.write(data)
         finally:
             try:
                 reader.close()
             except Exception:
                 pass
+
+        try:
+            stream.close()
+        except Exception:
+            pass
+
+    except Exception as exc:
+        raise RuntimeError(
+            "StefanM-TTS fehlgeschlagen: "
+            + _describe_exception(exc)
+        ) from exc
 
     finally:
         try:
@@ -359,6 +392,7 @@ async def _tts_helper_async(
     )
 
 
+
 def _tts_helper_entry(
     input_path: str,
     output_path: str,
@@ -374,20 +408,17 @@ def _tts_helper_entry(
                 "Der zu sprechende Text ist leer."
             )
 
-        asyncio.run(
-            _tts_helper_async(
-                text,
-                output_path,
-                status_path,
-            )
+        _tts_helper_sync(
+            text,
+            output_path,
+            status_path,
         )
-
         return 0
 
     except Exception as exc:
         _status_write(
             Path(status_path),
-            "FEHLER: " + str(exc),
+            "FEHLER: " + _describe_exception(exc),
         )
         return 1
 
