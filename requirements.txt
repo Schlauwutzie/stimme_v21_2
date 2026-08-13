@@ -1,0 +1,7 @@
+imageio-ffmpeg
+numpy
+Pillow
+pyinstaller
+winrt-Windows.Media.SpeechSynthesis
+winrt-Windows.Storage.Streams
+winrt-Windows.Foundation
