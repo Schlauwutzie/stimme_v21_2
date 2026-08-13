@@ -1,10 +1,10 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller spec for SchlauWutzie K.I. Video Studio V21.2."""
 from pathlib import Path
 from PyInstaller.utils.hooks import collect_all
 
 project = Path(SPECPATH).resolve()
 asset = project / "assets" / "schlawutzie.png"
+
 if not asset.exists():
     raise SystemExit(f"FEHLER: Standardbild fehlt: {asset}")
 
@@ -20,7 +20,15 @@ winrt_modules = [
 
 winrt_datas = []
 winrt_binaries = []
-winrt_hidden = [
+winrt_hidden = []
+
+for module in winrt_modules:
+    datas, binaries, hidden = collect_all(module)
+    winrt_datas.extend(datas)
+    winrt_binaries.extend(binaries)
+    winrt_hidden.extend(hidden)
+
+winrt_hidden.extend([
     "winrt",
     "winrt.runtime",
     "winrt.windows",
@@ -30,13 +38,7 @@ winrt_hidden = [
     "winrt.windows.media.speechsynthesis",
     "winrt.windows.storage",
     "winrt.windows.storage.streams",
-]
-
-for module in winrt_modules:
-    datas, binaries, hidden = collect_all(module)
-    winrt_datas.extend(datas)
-    winrt_binaries.extend(binaries)
-    winrt_hidden.extend(hidden)
+])
 
 analysis = Analysis(
     [str(project / "app.py")],
