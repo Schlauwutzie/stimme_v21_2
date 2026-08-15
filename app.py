@@ -42,6 +42,7 @@ def resource_path(relative_path: str) -> Path:
 
 
 DEFAULT_IMAGE = resource_path("assets/schlawutzie.png")
+INTRO_VIDEO = resource_path("assets/SchlauWutzie_KI_AI_Datacenter_Intro_V4_FINAL.mp4")
 
 
 def ffmpeg_path() -> str:
@@ -701,6 +702,119 @@ def draw_neural_hud(
 # ---------------------------------------------------------------------------
 # MP4 rendering
 # ---------------------------------------------------------------------------
+def prepend_intro(intro_path: str, main_path: str, output_path: str):
+    """
+    Prepend the fixed 8-second cinematic intro to the finished V21.5 video.
+    The intro and main video are normalized to the same 1080x1920 H.264/AAC
+    profile and concatenated without re-encoding where possible.
+    """
+    ff = ffmpeg_path()
+
+    intro_file = Path(intro_path)
+    main_file = Path(main_path)
+
+    if not intro_file.exists():
+        raise RuntimeError(
+            "Das Schlauwutzie K.I.-Intro wurde nicht gefunden:\n"
+            + str(intro_file)
+        )
+
+    if not main_file.exists():
+        raise RuntimeError(
+            "Das Hauptvideo wurde nicht gefunden:\n"
+            + str(main_file)
+        )
+
+    # Normalize to a stable intermediate format before concat.
+    temp_dir = Path(tempfile.mkdtemp(prefix="schlawutzie_intro_"))
+    intro_norm = temp_dir / "intro.mp4"
+    main_norm = temp_dir / "main.mp4"
+    concat_list = temp_dir / "concat.txt"
+
+    try:
+        normalize = [
+            ff, "-y",
+            "-i", str(intro_file),
+            "-vf", f"scale={OUT_W}:{OUT_H}:flags=lanczos,format=yuv420p,setsar=1",
+            "-r", str(FPS),
+            "-c:v", "libx264",
+            "-profile:v", "baseline",
+            "-level", "4.0",
+            "-pix_fmt", "yuv420p",
+            "-c:a", "aac",
+            "-b:a", "160k",
+            "-ar", "44100",
+            "-ac", "2",
+            "-movflags", "+faststart",
+            str(intro_norm),
+        ]
+        result = subprocess.run(
+            normalize,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(
+                "Das Intro konnte nicht vorbereitet werden.\n\n"
+                + result.stderr.decode(errors="ignore")[-2500:]
+            )
+
+        normalize_main = [
+            ff, "-y",
+            "-i", str(main_file),
+            "-vf", f"scale={OUT_W}:{OUT_H}:flags=lanczos,format=yuv420p,setsar=1",
+            "-r", str(FPS),
+            "-c:v", "libx264",
+            "-profile:v", "baseline",
+            "-level", "4.0",
+            "-pix_fmt", "yuv420p",
+            "-c:a", "aac",
+            "-b:a", "192k",
+            "-ar", "44100",
+            "-ac", "2",
+            "-movflags", "+faststart",
+            str(main_norm),
+        ]
+        result = subprocess.run(
+            normalize_main,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(
+                "Das Hauptvideo konnte nicht für das Intro vorbereitet werden.\n\n"
+                + result.stderr.decode(errors="ignore")[-2500:]
+            )
+
+        concat_list.write_text(
+            "file '" + str(intro_norm).replace("'", "'\\''") + "'\n"
+            "file '" + str(main_norm).replace("'", "'\\''") + "'\n",
+            encoding="utf-8",
+        )
+
+        concat_cmd = [
+            ff, "-y",
+            "-f", "concat",
+            "-safe", "0",
+            "-i", str(concat_list),
+            "-c", "copy",
+            "-movflags", "+faststart",
+            str(output_path),
+        ]
+        result = subprocess.run(
+            concat_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(
+                "Intro und Hauptvideo konnten nicht verbunden werden.\n\n"
+                + result.stderr.decode(errors="ignore")[-3000:]
+            )
+
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
 
 def render_video(
     background_path: str,
@@ -1514,7 +1628,7 @@ class App(tk.Tk):
         self.progress["value"] = 0
 
         self.set_status(
-            "MP4 wird gerendert …"
+            "V21.5: Intro + Hauptvideo werden gerendert …"
         )
 
         threading.Thread(
@@ -1540,12 +1654,33 @@ class App(tk.Tk):
                         ),
                 )
 
-            render_video(
-                self.background_path,
-                self.audio_path,
-                output,
-                progress,
+            # Render the proven V21.5 main video first.
+            temp_main = Path(
+                tempfile.mkstemp(
+                    prefix="schlawutzie_v21_5_main_",
+                    suffix=".mp4",
+                )[1]
             )
+            try:
+                render_video(
+                    self.background_path,
+                    self.audio_path,
+                    str(temp_main),
+                    progress,
+                )
+
+                # Now prepend the fixed 8-second cinematic AI datacenter intro.
+                prepend_intro(
+                    str(INTRO_VIDEO),
+                    str(temp_main),
+                    output,
+                )
+            finally:
+                try:
+                    if temp_main.exists():
+                        temp_main.unlink()
+                except OSError:
+                    pass
 
             output_path = Path(output)
 
@@ -1575,7 +1710,7 @@ class App(tk.Tk):
         self.progress["value"] = 100
 
         self.set_status(
-            "MP4 fertig."
+            "V21.5: Intro + Hauptvideo fertig."
         )
 
         messagebox.showinfo(
