@@ -1,4 +1,4 @@
-name: Build V21.5 Windows EXE
+name: Build V21.6 Intro FINAL Windows EXE
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    name: Build V21.5 Windows EXE
+    name: Build V21.6 Intro FINAL Windows EXE
     runs-on: windows-latest
 
     steps:
@@ -28,8 +28,9 @@ jobs:
         shell: pwsh
         run: |
           if (!(Test-Path "app.py")) { throw "app.py fehlt." }
-          if (!(Test-Path "SchlauWutzie_V21_5_FINAL.spec")) { throw "V21.5 SPEC fehlt." }
-          if (!(Test-Path "assets\schlawutzie.png")) { throw "assets\schlawutzie.png fehlt." }
+          if (!(Test-Path "SchlauWutzie_V21_6_INTRO_FINAL.spec")) { throw "V21.6 SPEC fehlt." }
+          if (!(Test-Path "assets\schlawutzie.png")) { throw "Hintergrundbild fehlt." }
+          if (!(Test-Path "assets\SchlauWutzie_KI_AI_Datacenter_Intro_V4_FINAL.mp4")) { throw "Intro-MP4 fehlt." }
 
       - name: Install dependencies
         shell: pwsh
@@ -47,21 +48,21 @@ jobs:
         run: |
           python -m py_compile app.py
 
-      - name: Build V21.5
+      - name: Build V21.6
         shell: pwsh
         run: |
           Remove-Item -Recurse -Force -ErrorAction SilentlyContinue build, dist
-          python -m PyInstaller --clean --noconfirm SchlauWutzie_V21_5_FINAL.spec
-          $exe = "dist\SchlauWutzie_V21_5_FINAL.exe"
-          if (!(Test-Path $exe)) { throw "V21.5 EXE wurde nicht erzeugt." }
+          python -m PyInstaller --clean --noconfirm SchlauWutzie_V21_6_INTRO_FINAL.spec
+          $exe = "dist\SchlauWutzie_V21_6_INTRO_FINAL.exe"
+          if (!(Test-Path $exe)) { throw "V21.6 EXE wurde nicht erzeugt." }
           $size = (Get-Item $exe).Length
-          Write-Host "V21.5 EXE size: $size bytes"
+          Write-Host "V21.6 EXE size: $size bytes"
           if ($size -lt 1000000) { throw "EXE ist unerwartet klein." }
 
-      - name: Upload V21.5 artifact
+      - name: Upload V21.6 artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SchlauWutzie_V21_5_FINAL-Windows-x64
-          path: dist/SchlauWutzie_V21_5_FINAL.exe
+          name: SchlauWutzie_V21_6_INTRO_FINAL-Windows-x64
+          path: dist/SchlauWutzie_V21_6_INTRO_FINAL.exe
           if-no-files-found: error
           retention-days: 14
