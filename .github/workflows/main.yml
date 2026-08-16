@@ -30,7 +30,7 @@ jobs:
           if (!(Test-Path "app.py")) { throw "app.py fehlt." }
           if (!(Test-Path "SchlauWutzie_V22_3_DTW_LARGE_V3_TURBO_FINAL.spec")) { throw "V22.3 SPEC fehlt." }
           if (!(Test-Path "assets\schlawutzie.png")) { throw "Hintergrundbild fehlt." }
-          if (!(Test-Path "assets\SchlauWutzie_KI_AI_Datacenter_Intro_V4_FINAL.mp4")) { throw "Intro-MP4 fehlt." }
+          if (!(Test-Path "assets\SchlauWutzie_AI_Datacenter_Intro_COUNTDOWN_FINAL.mp4")) { throw "Intro-MP4 fehlt." }
 
       - name: Install dependencies
         shell: pwsh
