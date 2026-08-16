@@ -1,4 +1,0 @@
-imageio-ffmpeg
-numpy
-Pillow
-pyinstaller
