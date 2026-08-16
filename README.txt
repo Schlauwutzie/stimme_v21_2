@@ -1,1 +1,0 @@
-V21.7.3: Whisper model remains bundled. The CPU backend now uses float32 instead of int8 for broader CPU compatibility. The rest of V21.6/V21.7 stays unchanged.
