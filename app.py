@@ -1203,6 +1203,60 @@ def render_video(
 
 
 # ---------------------------------------------------------------------------
+# Deutsche Auto-Untertitel – isolierter Hilfsprozess
+# ---------------------------------------------------------------------------
+
+def _subtitle_helper_entry(
+    audio_path: str,
+    output_ass: str,
+    status_path: str,
+):
+    """
+    Run faster-whisper in a separate process so a native CTranslate2 failure
+    cannot terminate the Tkinter GUI.
+    """
+    try:
+        def status_callback(message):
+            _status_write(Path(status_path), message)
+
+        ass_path = transcribe_german_to_ass(
+            audio_path,
+            status_callback=status_callback,
+            model_size="base",
+        )
+
+        target = Path(output_ass)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(ass_path, target)
+        _status_write(
+            Path(status_path),
+            "Deutsche Auto-Untertitel fertig.",
+        )
+        return 0
+
+    except Exception as exc:
+        _status_write(
+            Path(status_path),
+            "FEHLER: " + f"{type(exc).__name__}: {exc}",
+        )
+        return 1
+
+
+if (
+    __name__ == "__main__"
+    and len(sys.argv) == 5
+    and sys.argv[1] == "--subtitle-helper"
+):
+    raise SystemExit(
+        _subtitle_helper_entry(
+            sys.argv[2],
+            sys.argv[3],
+            sys.argv[4],
+        )
+    )
+
+
+# ---------------------------------------------------------------------------
 # GUI
 # ---------------------------------------------------------------------------
 
@@ -1228,6 +1282,8 @@ class App(tk.Tk):
         self.audio_path = None
         self.generated_audio = None
         self.subtitle_path = None
+        self.subtitle_process = None
+        self.subtitle_temp_dir = None
 
         self.busy = False
         self.preview_frames = []
@@ -1657,56 +1713,162 @@ class App(tk.Tk):
             text="Auto-Untertitel werden erzeugt …"
         )
         self.set_status(
-            "Deutsche Auto-Untertitel: wird vorbereitet …"
+            "Deutsche Auto-Untertitel: Hilfsprozess wird gestartet …"
         )
 
-        threading.Thread(
-            target=self._subtitle_worker,
-            daemon=True,
-        ).start()
+        temp_dir = Path(
+            tempfile.mkdtemp(prefix="schlawutzie_subtitle_worker_")
+        )
+        self.subtitle_temp_dir = temp_dir
 
-    def _subtitle_worker(self):
+        input_path = temp_dir / "audio.wav"
+        output_path = temp_dir / "deutsche_untertitel.ass"
+        status_path = temp_dir / "status.txt"
+
         try:
-            def status_callback(message):
-                self.after(
-                    0,
-                    lambda m=message: self.set_status(m),
-                )
-
-            path = transcribe_german_to_ass(
-                self.audio_path,
-                status_callback=status_callback,
-            )
-
-            self.after(
-                0,
-                lambda p=path: self._subtitle_done(p),
-            )
-
+            shutil.copy2(self.audio_path, input_path)
         except Exception as exc:
-            self.after(
-                0,
-                lambda: self._subtitle_error(str(exc)),
+            self._subtitle_error(
+                "Die Audio-Datei konnte für die Untertitel nicht vorbereitet werden.\n\n"
+                + str(exc)
             )
+            return
+
+        command = [
+            sys.executable,
+            "--subtitle-helper",
+            str(input_path),
+            str(output_path),
+            str(status_path),
+        ]
+
+        creationflags = getattr(
+            subprocess,
+            "CREATE_NO_WINDOW",
+            0,
+        )
+
+        try:
+            self.subtitle_process = subprocess.Popen(
+                command,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=creationflags,
+            )
+        except Exception as exc:
+            self._subtitle_error(
+                "Der Auto-Untertitel-Hilfsprozess konnte nicht gestartet werden.\n\n"
+                + str(exc)
+            )
+            return
+
+        self._poll_subtitle_process(
+            output_path,
+            status_path,
+        )
+
+    def _poll_subtitle_process(
+        self,
+        output_path: Path,
+        status_path: Path,
+    ):
+        process = self.subtitle_process
+
+        if process is None:
+            self._subtitle_error(
+                "Der Untertitel-Hilfsprozess ist nicht verfügbar."
+            )
+            return
+
+        status = ""
+        if status_path.exists():
+            try:
+                status = status_path.read_text(
+                    encoding="utf-8"
+                ).strip()
+            except Exception:
+                status = ""
+
+        if status:
+            self.set_status(status)
+
+        code = process.poll()
+
+        if code is None:
+            self.after(
+                250,
+                lambda: self._poll_subtitle_process(
+                    output_path,
+                    status_path,
+                ),
+            )
+            return
+
+        self.subtitle_process = None
+
+        if (
+            code == 0
+            and output_path.exists()
+            and output_path.stat().st_size > 100
+        ):
+            self._subtitle_done(
+                str(output_path)
+            )
+            return
+
+        details = status or (
+            f"Der Untertitel-Hilfsprozess wurde mit Exit-Code {code} beendet."
+        )
+
+        self._subtitle_error(
+            "Die deutsche Auto-Untertitelung konnte nicht abgeschlossen werden.\n\n"
+            + details
+        )
 
     def _subtitle_done(self, path):
         self.busy = False
         self.subtitle_path = path
+
         self.subtitle_status.config(
             text="Auto-Untertitel: Deutsch • fertig • werden beim Export eingebrannt."
         )
+
         self.set_status(
             "Deutsche Auto-Untertitel fertig."
         )
 
+        if self.subtitle_temp_dir is not None:
+            temp_dir = self.subtitle_temp_dir
+            self.subtitle_temp_dir = None
+            threading.Thread(
+                target=lambda: shutil.rmtree(
+                    temp_dir,
+                    ignore_errors=True,
+                ),
+                daemon=True,
+            ).start()
+
     def _subtitle_error(self, message):
         self.busy = False
+        self.subtitle_path = None
+
         self.subtitle_status.config(
             text="Auto-Untertitel: Fehler."
         )
+
         self.set_status(
             "Auto-Untertitel fehlgeschlagen."
         )
+
+        if self.subtitle_temp_dir is not None:
+            temp_dir = self.subtitle_temp_dir
+            self.subtitle_temp_dir = None
+            shutil.rmtree(
+                temp_dir,
+                ignore_errors=True,
+            )
+
         messagebox.showerror(
             "Deutsche Auto-Untertitel",
             message,
