@@ -1,4 +1,4 @@
-name: Build V22.2 FINAL – subtitle position and yellow highlight
+name: Build V22.3 FINAL – DTW Large-v3-Turbo
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    name: Build V22.2 FINAL
+    name: Build V22.3 FINAL
     runs-on: windows-latest
 
     steps:
@@ -28,7 +28,7 @@ jobs:
         shell: pwsh
         run: |
           if (!(Test-Path "app.py")) { throw "app.py fehlt." }
-          if (!(Test-Path "SchlauWutzie_V22_2_FINAL_STYLE_SYNC_FIX.spec")) { throw "V22.2 SPEC fehlt." }
+          if (!(Test-Path "SchlauWutzie_V22_3_DTW_LARGE_V3_TURBO_FINAL.spec")) { throw "V22.3 SPEC fehlt." }
           if (!(Test-Path "assets\schlawutzie.png")) { throw "Hintergrundbild fehlt." }
           if (!(Test-Path "assets\SchlauWutzie_KI_AI_Datacenter_Intro_V4_FINAL.mp4")) { throw "Intro-MP4 fehlt." }
 
@@ -49,39 +49,62 @@ jobs:
           Copy-Item -Recurse -Force (Join-Path $cli.Directory.FullName "*") "whisper_runtime\"
           if (!(Test-Path "whisper_runtime\whisper-cli.exe")) { throw "whisper-cli.exe fehlt." }
 
-      - name: Download whisper small q5_1 model
+      - name: Download Large-v3-Turbo q5_0 model
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force "whisper_models" | Out-Null
-          curl.exe -L --fail -o "whisper_models\ggml-small-q5_1.bin" "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small-q5_1.bin?download=true"
+          curl.exe -L --fail -o "whisper_models\ggml-large-v3-turbo-q5_0.bin" "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin?download=true"
 
-      - name: Verify Whisper model SHA256
+      - name: Verify Large-v3-Turbo q5_0 SHA256
         shell: pwsh
         run: |
-          $hash = (Get-FileHash "whisper_models\ggml-small-q5_1.bin" -Algorithm SHA256).Hash.ToLower()
-          $expected = "ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb"
-          if ($hash -ne $expected) { throw "Whisper-Modell SHA256 stimmt nicht." }
+          $hash = (Get-FileHash "whisper_models\ggml-large-v3-turbo-q5_0.bin" -Algorithm SHA256).Hash.ToLower()
+          $expected = "e050f7970618a659205450ad97eb95a18d69c9ee"
+          if ($hash -ne $expected) {
+            throw "Large-v3-Turbo q5_0 SHA256 stimmt nicht."
+          }
+          Write-Host "Large-v3-Turbo q5_0 SHA256 OK."
+
+      - name: Whisper DTW smoke test
+        shell: pwsh
+        run: |
+          python -c "import wave, struct; w=wave.open('smoke.wav','wb'); w.setnchannels(1); w.setsampwidth(2); w.setframerate(16000); w.writeframes(struct.pack('<h',0)*32000); w.close()"
+          & "whisper_runtime\whisper-cli.exe" `
+            -m "whisper_models\ggml-large-v3-turbo-q5_0.bin" `
+            -f "smoke.wav" `
+            -l de `
+            -ng `
+            -t 4 `
+            -p 1 `
+            -bs 2 `
+            -bo 2 `
+            -dtw large.v3.turbo `
+            -ojf `
+            -of smoke `
+            -np `
+            -nf
+          if (!(Test-Path "smoke.json")) { throw "DTW Smoke-Test fehlgeschlagen." }
 
       - name: Syntax check
         shell: pwsh
         run: |
           python -m py_compile app.py
 
-      - name: Build V22.2
+      - name: Build V22.3
         shell: pwsh
         run: |
           Remove-Item -Recurse -Force -ErrorAction SilentlyContinue build, dist
-          python -m PyInstaller --clean --noconfirm SchlauWutzie_V22_2_FINAL_STYLE_SYNC_FIX.spec
-          $exe = "dist\SchlauWutzie_V22_2_FINAL_STYLE_SYNC_FIX.exe"
-          if (!(Test-Path $exe)) { throw "V22.2 EXE wurde nicht erzeugt." }
+          python -m PyInstaller --clean --noconfirm SchlauWutzie_V22_3_DTW_LARGE_V3_TURBO_FINAL.spec
+          $exe = "dist\SchlauWutzie_V22_3_DTW_LARGE_V3_TURBO_FINAL.exe"
+          if (!(Test-Path $exe)) { throw "V22.3 EXE wurde nicht erzeugt." }
           $size = (Get-Item $exe).Length
-          if ($size -lt 150000000) { throw "V22.2 EXE ist verdächtig klein." }
-          Write-Host "V22.2 EXE size: $size bytes"
+          if ($size -lt 500000000) { throw "V22.3 EXE ist verdächtig klein; Modell fehlt wahrscheinlich." }
+          Write-Host "V22.3 EXE size: $size bytes"
 
-      - name: Upload V22.2 artifact
+      - name: Upload V22.3 artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SchlauWutzie_V22_2_FINAL_STYLE_SYNC_FIX-Windows-x64
-          path: dist/SchlauWutzie_V22_2_FINAL_STYLE_SYNC_FIX.exe
+          name: SchlauWutzie_V22_3_DTW_LARGE_V3_TURBO_FINAL-Windows-x64
+          path: dist/SchlauWutzie_V22_3_DTW_LARGE_V3_TURBO_FINAL.exe
           if-no-files-found: error
           retention-days: 14
