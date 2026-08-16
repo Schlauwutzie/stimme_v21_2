@@ -1,1 +1,0 @@
-V22.3 FINAL: alter Einspieler entfernt; neuer 8-Sekunden-Einspieler mit Countdown.m4a als neues Intro eingebaut.
