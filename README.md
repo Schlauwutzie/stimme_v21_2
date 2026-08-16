@@ -1,30 +1,19 @@
-# SchlauWutzie K.I. – Video Studio V22 FINAL
+# SchlauWutzie K.I. – Video Studio V22.1 FINAL
 
-V22 wird **direkt auf dem bewährten V21.5-Kern** aufgebaut.
+V22.1 is a bug-fix release of V22.
 
-## Bewährt und erhalten
+## Important fix
 
-- Microsoft Stefan / OneCore
-- reaktive K.I.-Balken
-- AI-Datacenter-Intro
-- Copy & Paste
-- 9:16 / 1080×1920
-- MP4-Export
+The previous V22 could correctly create a subtitle `.ass` file but then
+skip the burn-in step when `self.subtitle_path` already existed.
 
-## Neu
+V22.1 always burns the generated/stored subtitle file into the spoken
+main video before the clean AI-Datacenter intro is prepended.
 
-Deutsche Auto-Untertitel mit **whisper.cpp v1.9.1** und
-`ggml-small-q5_1.bin`.
+Pipeline:
 
-Whisper.cpp unterstützt Wort-Level-Timestamps über `-ml 1`; zusammen
-mit `-sow` wird nach Wörtern gesplittet. citeturn905157search0turn905157search3
+**StefanM → K.I.-Animation → whisper.cpp word timestamps → subtitle burn-in → AI-Datacenter intro**
 
-Das Modell `ggml-small-q5_1.bin` ist rund 190 MB groß und die
-SHA256-Prüfsumme wird beim Build verifiziert. citeturn414511search0
+The intro itself remains clean; subtitles belong to the main spoken video.
 
-Beim Export gilt:
-
-**StefanM → K.I.-Animation → echte Wort-Zeitstempel → Untertitel in MP4 → Intro davor**
-
-Die Untertitel werden nicht auf das Datacenter-Intro gelegt; sie gehören
-nur zum gesprochenen Hauptvideo.
+The proven V21.5 core remains the base.
