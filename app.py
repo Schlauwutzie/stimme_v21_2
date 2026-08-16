@@ -796,33 +796,38 @@ def transcribe_german_to_ass(
     if not source.exists():
         raise RuntimeError("Die Audio-Datei für die Untertitel wurde nicht gefunden.")
 
-    cache_dir = Path(
-        os.environ.get(
-            "LOCALAPPDATA",
-            str(Path.home()),
-        )
-    ) / "SchlauWutzieKI" / "WhisperModels"
+    model_dir = resource_path("assets/whisper-base")
 
-    cache_dir.mkdir(parents=True, exist_ok=True)
+    required_files = [
+        model_dir / "config.json",
+        model_dir / "model.bin",
+        model_dir / "tokenizer.json",
+        model_dir / "vocabulary.txt",
+    ]
+
+    if not model_dir.exists() or any(not path.exists() for path in required_files):
+        missing = [str(path) for path in required_files if not path.exists()]
+        raise RuntimeError(
+            "Das eingebaute deutsche Sprachmodell fehlt.\n\n"
+            "Die V21.7.2-EXE wurde nicht vollständig gebaut.\n\n"
+            "Fehlende Dateien:\n" + "\n".join(missing)
+        )
 
     if status_callback:
         status_callback(
-            "Deutsche Auto-Untertitel: Sprachmodell wird geladen …"
+            "Deutsche Auto-Untertitel: eingebautes Sprachmodell wird geladen …"
         )
 
     try:
         model = WhisperModel(
-            model_size,
+            str(model_dir),
             device="cpu",
             compute_type="int8",
-            download_root=str(cache_dir),
         )
     except Exception as exc:
         raise RuntimeError(
-            "Das deutsche Sprachmodell konnte nicht geladen werden.\n\n"
-            "Beim ersten Start benötigt V21.7 eine Internetverbindung, "
-            "um das Whisper-Modell einmalig herunterzuladen.\n\n"
-            f"Technischer Fehler: {exc}"
+            "Das eingebaute deutsche Sprachmodell konnte nicht geladen werden.\n\n"
+            f"Technischer Fehler: {type(exc).__name__}: {exc}"
         ) from exc
 
     if status_callback:
