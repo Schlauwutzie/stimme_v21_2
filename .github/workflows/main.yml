@@ -1,4 +1,4 @@
-name: Build V22.1 FINAL – subtitle burn fix
+name: Build V22.2 FINAL – subtitle position and yellow highlight
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    name: Build V22.1 FINAL
+    name: Build V22.2 FINAL
     runs-on: windows-latest
 
     steps:
@@ -24,11 +24,11 @@ jobs:
           architecture: x64
           cache: pip
 
-      - name: Verify base project
+      - name: Verify project
         shell: pwsh
         run: |
           if (!(Test-Path "app.py")) { throw "app.py fehlt." }
-          if (!(Test-Path "SchlauWutzie_V22_1_FINAL_SUBTITEL_FIX.spec")) { throw "V22.1 SPEC fehlt." }
+          if (!(Test-Path "SchlauWutzie_V22_2_FINAL_STYLE_SYNC_FIX.spec")) { throw "V22.2 SPEC fehlt." }
           if (!(Test-Path "assets\schlawutzie.png")) { throw "Hintergrundbild fehlt." }
           if (!(Test-Path "assets\SchlauWutzie_KI_AI_Datacenter_Intro_V4_FINAL.mp4")) { throw "Intro-MP4 fehlt." }
 
@@ -67,21 +67,21 @@ jobs:
         run: |
           python -m py_compile app.py
 
-      - name: Build V22.1
+      - name: Build V22.2
         shell: pwsh
         run: |
           Remove-Item -Recurse -Force -ErrorAction SilentlyContinue build, dist
-          python -m PyInstaller --clean --noconfirm SchlauWutzie_V22_1_FINAL_SUBTITEL_FIX.spec
-          $exe = "dist\SchlauWutzie_V22_1_FINAL_SUBTITEL_FIX.exe"
-          if (!(Test-Path $exe)) { throw "V22.1 EXE wurde nicht erzeugt." }
+          python -m PyInstaller --clean --noconfirm SchlauWutzie_V22_2_FINAL_STYLE_SYNC_FIX.spec
+          $exe = "dist\SchlauWutzie_V22_2_FINAL_STYLE_SYNC_FIX.exe"
+          if (!(Test-Path $exe)) { throw "V22.2 EXE wurde nicht erzeugt." }
           $size = (Get-Item $exe).Length
-          if ($size -lt 150000000) { throw "V22.1 EXE ist verdächtig klein." }
-          Write-Host "V22.1 EXE size: $size bytes"
+          if ($size -lt 150000000) { throw "V22.2 EXE ist verdächtig klein." }
+          Write-Host "V22.2 EXE size: $size bytes"
 
-      - name: Upload V22.1 artifact
+      - name: Upload V22.2 artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SchlauWutzie_V22_1_FINAL_SUBTITEL_FIX-Windows-x64
-          path: dist/SchlauWutzie_V22_1_FINAL_SUBTITEL_FIX.exe
+          name: SchlauWutzie_V22_2_FINAL_STYLE_SYNC_FIX-Windows-x64
+          path: dist/SchlauWutzie_V22_2_FINAL_STYLE_SYNC_FIX.exe
           if-no-files-found: error
           retention-days: 14
