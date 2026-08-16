@@ -1,16 +1,14 @@
-V21.8.2 FIX
+V21.8.3 FIX
 
-The previous runtime error was:
-System.Exception: The metadata file 'System.Speech.dll' could not be found.
+The runtime error in V21.8.2 was caused by using:
+RecognizedWordUnit.AudioPosition / AudioDuration.
 
-Cause:
-PowerShell had loaded System.Speech, but Add-Type was given only the bare
-file name. On some Windows environments that name is not resolved as a
-reference assembly.
+Some System.Speech versions do not expose those properties directly.
 
-Fix:
-The actual System.Speech assembly path is now obtained from:
-[System.Speech.Recognition.SpeechRecognitionEngine].Assembly.Location
-and that full path is passed to Add-Type -ReferencedAssemblies.
+V21.8.3 uses the documented compatible API:
+RecognitionResult.GetAudioForWordRange(word, word)
+and reads:
+RecognizedAudio.AudioPosition
+RecognizedAudio.Duration
 
-No Whisper/CTranslate2 is used.
+This provides per-word audio timing without Whisper/CTranslate2.
