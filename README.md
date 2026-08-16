@@ -1,19 +1,16 @@
-# SchlauWutzie K.I. – Video Studio V22.1 FINAL
+# SchlauWutzie K.I. – Video Studio V22.2 FINAL
 
-V22.1 is a bug-fix release of V22.
+V22.2 is a visual subtitle fix for the V22.1 build.
 
-## Important fix
+## Changes
 
-The previous V22 could correctly create a subtitle `.ass` file but then
-skip the burn-in step when `self.subtitle_path` already existed.
+- subtitle position moved clearly above the K.I. waveform
+- larger safe area so subtitles do not sit on the animated bars
+- black translucent caption background for readability
+- white text with yellow karaoke progression
+- same whisper.cpp timestamps and audio
+- StefanM, K.I. bars and Datacenter intro remain unchanged
 
-V22.1 always burns the generated/stored subtitle file into the spoken
-main video before the clean AI-Datacenter intro is prepended.
-
-Pipeline:
-
-**StefanM → K.I.-Animation → whisper.cpp word timestamps → subtitle burn-in → AI-Datacenter intro**
-
-The intro itself remains clean; subtitles belong to the main spoken video.
-
-The proven V21.5 core remains the base.
+The actual subtitle timings are not re-generated differently; this release
+fixes the presentation so the spoken text remains readable and the
+highlight is visible.
