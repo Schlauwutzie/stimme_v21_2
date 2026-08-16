@@ -1,4 +1,4 @@
-name: Build V21.7.1 German Auto-Subtitles FIX
+name: Build V21.7.2 Offline German Auto-Subtitles
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    name: Build V21.7.1 German Auto-Subtitles FIX
+    name: Build V21.7.2 Offline German Auto-Subtitles
     runs-on: windows-latest
 
     steps:
@@ -24,11 +24,11 @@ jobs:
           architecture: x64
           cache: pip
 
-      - name: Verify project
+      - name: Verify base project
         shell: pwsh
         run: |
           if (!(Test-Path "app.py")) { throw "app.py fehlt." }
-          if (!(Test-Path "SchlauWutzie_V21_7_1_DEUTSCHE_AUTO_UNTERTITEL.spec")) { throw "V21.7.1 SPEC fehlt." }
+          if (!(Test-Path "SchlauWutzie_V21_7_2_OFFLINE_DEUTSCHE_AUTO_UNTERTITEL.spec")) { throw "V21.7.2 SPEC fehlt." }
           if (!(Test-Path "assets\schlawutzie.png")) { throw "Hintergrundbild fehlt." }
           if (!(Test-Path "assets\SchlauWutzie_KI_AI_Datacenter_Intro_V4_FINAL.mp4")) { throw "Intro-MP4 fehlt." }
 
@@ -38,10 +38,30 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
+      - name: Download bundled German Whisper model
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force "assets\whisper-base" | Out-Null
+          python -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='Systran/faster-whisper-base', revision='ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66', local_dir='assets/whisper-base', allow_patterns=['config.json','model.bin','tokenizer.json','vocabulary.txt'])"
+
+      - name: Verify bundled model
+        shell: pwsh
+        run: |
+          $required = @(
+            "assets\whisper-base\config.json",
+            "assets\whisper-base\model.bin",
+            "assets\whisper-base\tokenizer.json",
+            "assets\whisper-base\vocabulary.txt"
+          )
+          foreach ($file in $required) {
+            if (!(Test-Path $file)) { throw "Sprachmodell-Datei fehlt: $file" }
+          }
+          Get-ChildItem "assets\whisper-base" | Select-Object Name, Length
+
       - name: Verify Python packages
         shell: pwsh
         run: |
-          python -c "import faster_whisper; import ctranslate2; print('faster-whisper OK'); print('ctranslate2 OK')"
+          python -c "import faster_whisper; import ctranslate2; import huggingface_hub; print('faster-whisper OK'); print('ctranslate2 OK'); print('huggingface_hub OK')"
 
       - name: Verify PyWinRT
         shell: pwsh
@@ -53,21 +73,21 @@ jobs:
         run: |
           python -m py_compile app.py
 
-      - name: Build V21.7.1
+      - name: Build V21.7.2
         shell: pwsh
         run: |
           Remove-Item -Recurse -Force -ErrorAction SilentlyContinue build, dist
-          python -m PyInstaller --clean --noconfirm SchlauWutzie_V21_7_1_DEUTSCHE_AUTO_UNTERTITEL.spec
-          $exe = "dist\SchlauWutzie_V21_7_1_DEUTSCHE_AUTO_UNTERTITEL.exe"
-          if (!(Test-Path $exe)) { throw "V21.7.1 EXE wurde nicht erzeugt." }
+          python -m PyInstaller --clean --noconfirm SchlauWutzie_V21_7_2_OFFLINE_DEUTSCHE_AUTO_UNTERTITEL.spec
+          $exe = "dist\SchlauWutzie_V21_7_2_OFFLINE_DEUTSCHE_AUTO_UNTERTITEL.exe"
+          if (!(Test-Path $exe)) { throw "V21.7.2 EXE wurde nicht erzeugt." }
           $size = (Get-Item $exe).Length
-          Write-Host "V21.7.1 EXE size: $size bytes"
+          Write-Host "V21.7.2 EXE size: $size bytes"
           if ($size -lt 1000000) { throw "EXE ist unerwartet klein." }
 
-      - name: Upload V21.7.1 artifact
+      - name: Upload V21.7.2 artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SchlauWutzie_V21_7_1_DEUTSCHE_AUTO_UNTERTITEL
-          path: dist/SchlauWutzie_V21_7_1_DEUTSCHE_AUTO_UNTERTITEL.exe
+          name: SchlauWutzie_V21_7_2_OFFLINE_DEUTSCHE_AUTO_UNTERTITEL
+          path: dist/SchlauWutzie_V21_7_2_OFFLINE_DEUTSCHE_AUTO_UNTERTITEL.exe
           if-no-files-found: error
           retention-days: 14
