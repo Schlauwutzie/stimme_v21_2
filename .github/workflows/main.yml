@@ -1,4 +1,4 @@
-name: Build V21.7.2 Offline German Auto-Subtitles
+name: Build V21.7.3 Float32 German Auto-Subtitles
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    name: Build V21.7.2 Offline German Auto-Subtitles
+    name: Build V21.7.3 Float32 German Auto-Subtitles
     runs-on: windows-latest
 
     steps:
@@ -28,7 +28,7 @@ jobs:
         shell: pwsh
         run: |
           if (!(Test-Path "app.py")) { throw "app.py fehlt." }
-          if (!(Test-Path "SchlauWutzie_V21_7_2_OFFLINE_DEUTSCHE_AUTO_UNTERTITEL.spec")) { throw "V21.7.2 SPEC fehlt." }
+          if (!(Test-Path "SchlauWutzie_V21_7_3_FLOAT32_DEUTSCHE_AUTO_UNTERTITEL.spec")) { throw "V21.7.3 SPEC fehlt." }
           if (!(Test-Path "assets\schlawutzie.png")) { throw "Hintergrundbild fehlt." }
           if (!(Test-Path "assets\SchlauWutzie_KI_AI_Datacenter_Intro_V4_FINAL.mp4")) { throw "Intro-MP4 fehlt." }
 
@@ -56,9 +56,8 @@ jobs:
           foreach ($file in $required) {
             if (!(Test-Path $file)) { throw "Sprachmodell-Datei fehlt: $file" }
           }
-          Get-ChildItem "assets\whisper-base" | Select-Object Name, Length
 
-      - name: Verify Python packages
+      - name: Verify packages
         shell: pwsh
         run: |
           python -c "import faster_whisper; import ctranslate2; import huggingface_hub; print('faster-whisper OK'); print('ctranslate2 OK'); print('huggingface_hub OK')"
@@ -73,21 +72,20 @@ jobs:
         run: |
           python -m py_compile app.py
 
-      - name: Build V21.7.2
+      - name: Build V21.7.3
         shell: pwsh
         run: |
           Remove-Item -Recurse -Force -ErrorAction SilentlyContinue build, dist
-          python -m PyInstaller --clean --noconfirm SchlauWutzie_V21_7_2_OFFLINE_DEUTSCHE_AUTO_UNTERTITEL.spec
-          $exe = "dist\SchlauWutzie_V21_7_2_OFFLINE_DEUTSCHE_AUTO_UNTERTITEL.exe"
-          if (!(Test-Path $exe)) { throw "V21.7.2 EXE wurde nicht erzeugt." }
+          python -m PyInstaller --clean --noconfirm Schlawutzie_V21_7_3_FLOAT32_DEUTSCHE_AUTO_UNTERTITEL.spec
+          $exe = "dist\SchlauWutzie_V21_7_3_FLOAT32_DEUTSCHE_AUTO_UNTERTITEL.exe"
+          if (!(Test-Path $exe)) { throw "V21.7.3 EXE wurde nicht erzeugt." }
           $size = (Get-Item $exe).Length
-          Write-Host "V21.7.2 EXE size: $size bytes"
           if ($size -lt 1000000) { throw "EXE ist unerwartet klein." }
 
-      - name: Upload V21.7.2 artifact
+      - name: Upload V21.7.3 artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SchlauWutzie_V21_7_2_OFFLINE_DEUTSCHE_AUTO_UNTERTITEL
-          path: dist/SchlauWutzie_V21_7_2_OFFLINE_DEUTSCHE_AUTO_UNTERTITEL.exe
+          name: SchlauWutzie_V21_7_3_FLOAT32_DEUTSCHE_AUTO_UNTERTITEL
+          path: dist/SchlauWutzie_V21_7_3_FLOAT32_DEUTSCHE_AUTO_UNTERTITEL.exe
           if-no-files-found: error
           retention-days: 14
