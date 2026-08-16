@@ -1,47 +1,30 @@
 # SchlauWutzie K.I. – Video Studio V22 FINAL
 
-V22 ist die neue endgültige Auto-Untertitel-Engine.
+V22 wird **direkt auf dem bewährten V21.5-Kern** aufgebaut.
 
-## Auto-Untertitel
-
-Die V22 verwendet **whisper.cpp v1.9.1** mit dem mehrsprachigen
-**Whisper Small q5_1** Modell.
-
-Das Modell ist für Deutsch geeignet und wird während des GitHub-Builds
-in die EXE eingebaut. Beim normalen Start ist kein Modell-Download nötig.
-
-Die Erkennung verwendet:
-
-- Deutsch fest als Sprache
-- Wort-Level-Timestamps mit `--max-len 1`
-- nur einen Whisper-Prozessor, um Timestamp-Grenzfehler zu vermeiden
-- 5er Beam Search
-- den eingefügten Originaltext als Initial Prompt für bessere Erkennung
-  von Namen, Zahlen und Eigennamen
-
-## V22 Funktionen
+## Bewährt und erhalten
 
 - Microsoft Stefan / OneCore
-- Copy & Paste
-- AI-Datacenter-Intro
 - reaktive K.I.-Balken
-- deutsche Auto-Untertitel
-- Karaoke-artige Wort-Hervorhebung
+- AI-Datacenter-Intro
+- Copy & Paste
 - 9:16 / 1080×1920
 - MP4-Export
 
-## Ziel
+## Neu
 
-Der Ablauf:
+Deutsche Auto-Untertitel mit **whisper.cpp v1.9.1** und
+`ggml-small-q5_1.bin`.
 
-**Text einfügen → StefanM → Deutsche Auto-Untertitel → Vorschau → MP4**
+Whisper.cpp unterstützt Wort-Level-Timestamps über `-ml 1`; zusammen
+mit `-sow` wird nach Wörtern gesplittet. citeturn905157search0turn905157search3
 
-Die Auto-Untertitel werden direkt in die fertige MP4 eingebrannt.
+Das Modell `ggml-small-q5_1.bin` ist rund 190 MB groß und die
+SHA256-Prüfsumme wird beim Build verifiziert. citeturn414511search0
 
-## Technischer Hinweis
+Beim Export gilt:
 
-whisper.cpp ist eine C/C++-Implementierung von Whisper ohne den
-CTranslate2/Python-ML-Stack der V21.7/V21.8. Die offizielle v1.9.1
-Release unterstützt Windows und CPU-only inference.
+**StefanM → K.I.-Animation → echte Wort-Zeitstempel → Untertitel in MP4 → Intro davor**
 
-Das Whisper-Small-q5_1-Modell ist etwa 190 MB groß.
+Die Untertitel werden nicht auf das Datacenter-Intro gelegt; sie gehören
+nur zum gesprochenen Hauptvideo.
