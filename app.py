@@ -30,7 +30,7 @@ except Exception:
     WINRT_TTS_AVAILABLE = False
 
 
-APP_NAME = "SchlauWutzie K.I. – Video Studio V21.5 FINAL"
+APP_NAME = "SchlauWutzie K.I. – Video Studio V21.7 FINAL"
 IN_W, IN_H = 720, 1280
 OUT_W, OUT_H = 1080, 1920
 FPS = 30
@@ -699,6 +699,277 @@ def draw_neural_hud(
     return frame.convert("RGB")
 
 
+
+# ---------------------------------------------------------------------------
+# Deutsche Auto-Untertitel (Whisper / faster-whisper)
+# ---------------------------------------------------------------------------
+
+def _ass_time(seconds: float) -> str:
+    seconds = max(0.0, float(seconds))
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    secs = seconds % 60
+    whole = int(secs)
+    centis = int(round((secs - whole) * 100))
+    if centis >= 100:
+        whole += 1
+        centis = 0
+    if whole >= 60:
+        minutes += 1
+        whole = 0
+    if minutes >= 60:
+        hours += 1
+        minutes = 0
+    return f"{hours}:{minutes:02d}:{whole:02d}.{centis:02d}"
+
+
+def _escape_ass_text(text: str) -> str:
+    text = str(text or "").replace("\r", " ").replace("\n", " ")
+    text = text.replace("{", "(").replace("}", ")")
+    return text.strip()
+
+
+def _group_words_for_caption(words, max_words=7, max_chars=42, max_duration=3.0):
+    groups = []
+    current = []
+
+    def flush():
+        nonlocal current
+        if current:
+            groups.append(current)
+            current = []
+
+    for word in words:
+        token = _escape_ass_text(getattr(word, "word", "")).strip()
+        if not token:
+            continue
+
+        start = float(getattr(word, "start", 0.0) or 0.0)
+        end = float(getattr(word, "end", start) or start)
+        item = (token, start, end)
+
+        if not current:
+            current.append(item)
+            continue
+
+        current_text = " ".join(x[0] for x in current)
+        candidate = current_text + " " + token
+        duration = end - current[0][1]
+        punctuation_break = current[-1][0].rstrip().endswith((".", "!", "?", ":", ";"))
+
+        if (
+            len(current) >= max_words
+            or len(candidate) > max_chars
+            or duration > max_duration
+            or punctuation_break
+        ):
+            flush()
+
+        current.append(item)
+
+    flush()
+    return groups
+
+
+def transcribe_german_to_ass(
+    audio_path: str,
+    status_callback=None,
+    model_size: str = "base",
+) -> str:
+    """
+    Create CapCut-style German subtitles with word timing.
+
+    The first run downloads the selected faster-whisper model into the
+    user's local cache. Afterwards the model is reused locally.
+    """
+    try:
+        from faster_whisper import WhisperModel
+    except Exception as exc:
+        raise RuntimeError(
+            "Die deutsche Auto-Untertitel-Funktion benötigt faster-whisper.\n\n"
+            "Bitte die V21.7-Abhängigkeiten installieren oder die GitHub-EXE "
+            "mit V21.7 requirements.txt bauen.\n\n"
+            f"Technischer Fehler: {exc}"
+        ) from exc
+
+    source = Path(audio_path)
+    if not source.exists():
+        raise RuntimeError("Die Audio-Datei für die Untertitel wurde nicht gefunden.")
+
+    cache_dir = Path(
+        os.environ.get(
+            "LOCALAPPDATA",
+            str(Path.home()),
+        )
+    ) / "SchlauWutzieKI" / "WhisperModels"
+
+    cache_dir.mkdir(parents=True, exist_ok=True)
+
+    if status_callback:
+        status_callback(
+            "Deutsche Auto-Untertitel: Sprachmodell wird geladen …"
+        )
+
+    try:
+        model = WhisperModel(
+            model_size,
+            device="cpu",
+            compute_type="int8",
+            download_root=str(cache_dir),
+        )
+    except Exception as exc:
+        raise RuntimeError(
+            "Das deutsche Sprachmodell konnte nicht geladen werden.\n\n"
+            "Beim ersten Start benötigt V21.7 eine Internetverbindung, "
+            "um das Whisper-Modell einmalig herunterzuladen.\n\n"
+            f"Technischer Fehler: {exc}"
+        ) from exc
+
+    if status_callback:
+        status_callback(
+            "Deutsche Auto-Untertitel: Sprache wird erkannt …"
+        )
+
+    segments, info = model.transcribe(
+        str(source),
+        language="de",
+        task="transcribe",
+        beam_size=5,
+        vad_filter=True,
+        word_timestamps=True,
+        condition_on_previous_text=True,
+        temperature=0.0,
+    )
+
+    all_words = []
+    for segment in segments:
+        for word in (getattr(segment, "words", None) or []):
+            all_words.append(word)
+
+    if not all_words:
+        raise RuntimeError(
+            "Es wurden keine deutschen Sprachwörter erkannt."
+        )
+
+    groups = _group_words_for_caption(all_words)
+
+    ass_lines = [
+        "[Script Info]",
+        "ScriptType: v4.00+",
+        "PlayResX: 1080",
+        "PlayResY: 1920",
+        "WrapStyle: 2",
+        "ScaledBorderAndShadow: yes",
+        "",
+        "[V4+ Styles]",
+        "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, "
+        "OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, "
+        "ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, "
+        "Alignment, MarginL, MarginR, MarginV, Encoding",
+        "Style: TikTok,Segoe UI,52,&H00FFFFFF,&H0000FFFF,&H00101010,&H70000000,"
+        "-1,0,0,0,100,100,0,0,3,2,0,2,80,80,390,1",
+        "",
+        "[Events]",
+        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
+    ]
+
+    for index, group in enumerate(groups, start=1):
+        start = group[0][1]
+        end = max(group[-1][2], start + 0.30)
+
+        parts = []
+        for token, word_start, word_end in group:
+            duration_cs = max(
+                1,
+                int(round((word_end - word_start) * 100 / 10)),
+            )
+            # ASS \k uses centiseconds/10 = hundredths of a second.
+            duration_cs = max(
+                1,
+                int(round((word_end - word_start) * 100)),
+            )
+            parts.append(r"{\k" + str(duration_cs) + "}" + token)
+
+        text = " ".join(parts)
+        ass_lines.append(
+            f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},TikTok,"
+            f",0,0,390,,{text}"
+        )
+
+    ass_dir = Path(
+        tempfile.mkdtemp(prefix="schlawutzie_subtitles_")
+    )
+    ass_path = ass_dir / "deutsche_untertitel.ass"
+    ass_path.write_text(
+        "\n".join(ass_lines),
+        encoding="utf-8",
+    )
+
+    if status_callback:
+        status_callback(
+            f"Deutsche Auto-Untertitel fertig: {len(groups)} Untertitelblöcke."
+        )
+
+    return str(ass_path)
+
+
+def burn_ass_subtitles(
+    input_video: str,
+    subtitle_path: str,
+    output_video: str,
+):
+    ff = ffmpeg_path()
+    source = Path(input_video)
+    ass = Path(subtitle_path)
+
+    if not source.exists():
+        raise RuntimeError("Das Video für die Untertitel wurde nicht gefunden.")
+    if not ass.exists():
+        raise RuntimeError("Die Untertitel-Datei wurde nicht gefunden.")
+
+    escaped_ass = (
+        str(ass.resolve())
+        .replace("\\", "/")
+        .replace(":", r"\:")
+        .replace("'", r"\'")
+    )
+
+    command = [
+        ff,
+        "-y",
+        "-i",
+        str(source),
+        "-vf",
+        f"ass='{escaped_ass}'",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "medium",
+        "-crf",
+        "20",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "copy",
+        "-movflags",
+        "+faststart",
+        str(output_video),
+    ]
+
+    result = subprocess.run(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+    if result.returncode != 0:
+        raise RuntimeError(
+            "Deutsche Untertitel konnten nicht in die MP4 eingebrannt werden.\n\n"
+            + result.stderr.decode(errors="ignore")[-3500:]
+        )
+
+
+
 # ---------------------------------------------------------------------------
 # MP4 rendering
 # ---------------------------------------------------------------------------
@@ -956,6 +1227,7 @@ class App(tk.Tk):
         self.background_path = None
         self.audio_path = None
         self.generated_audio = None
+        self.subtitle_path = None
 
         self.busy = False
         self.preview_frames = []
@@ -1008,7 +1280,7 @@ class App(tk.Tk):
 
         ttk.Label(
             root,
-            text="1080 × 1920 • 9:16 • interne Rendergröße 720 × 1280",
+            text="1080 × 1920 • 9:16 • deutsche Auto-Untertitel • interne Rendergröße 720 × 1280",
         ).pack(
             anchor="w",
             pady=(2, 12),
@@ -1154,6 +1426,21 @@ class App(tk.Tk):
             text="WAV/MP3 LADEN",
             command=self.load_audio,
         ).pack(side="left")
+
+        ttk.Button(
+            audio_buttons,
+            text="DEUTSCHE AUTO-UNTERTITEL",
+            command=self.generate_subtitles,
+        ).pack(side="left", padx=(8, 0))
+
+        self.subtitle_status = ttk.Label(
+            left,
+            text="Auto-Untertitel: noch nicht erzeugt.",
+        )
+        self.subtitle_status.pack(
+            anchor="w",
+            pady=(0, 4),
+        )
 
         self.voice_status = ttk.Label(
             left,
@@ -1335,6 +1622,10 @@ class App(tk.Tk):
 
         try:
             self.audio_path = audio_to_wav(path)
+            self.subtitle_path = None
+            self.subtitle_status.config(
+                text="Auto-Untertitel: noch nicht erzeugt."
+            )
 
             self.audio_label.config(
                 text=f"Audio: {os.path.basename(path)}"
@@ -1349,6 +1640,77 @@ class App(tk.Tk):
                 "Audio",
                 str(exc),
             )
+
+    def generate_subtitles(self):
+        if self.busy:
+            return
+
+        if not self.audio_path:
+            messagebox.showwarning(
+                "Audio fehlt",
+                "Bitte zuerst StefanM erzeugen oder WAV/MP3 laden.",
+            )
+            return
+
+        self.busy = True
+        self.subtitle_status.config(
+            text="Auto-Untertitel werden erzeugt …"
+        )
+        self.set_status(
+            "Deutsche Auto-Untertitel: wird vorbereitet …"
+        )
+
+        threading.Thread(
+            target=self._subtitle_worker,
+            daemon=True,
+        ).start()
+
+    def _subtitle_worker(self):
+        try:
+            def status_callback(message):
+                self.after(
+                    0,
+                    lambda m=message: self.set_status(m),
+                )
+
+            path = transcribe_german_to_ass(
+                self.audio_path,
+                status_callback=status_callback,
+            )
+
+            self.after(
+                0,
+                lambda p=path: self._subtitle_done(p),
+            )
+
+        except Exception as exc:
+            self.after(
+                0,
+                lambda: self._subtitle_error(str(exc)),
+            )
+
+    def _subtitle_done(self, path):
+        self.busy = False
+        self.subtitle_path = path
+        self.subtitle_status.config(
+            text="Auto-Untertitel: Deutsch • fertig • werden beim Export eingebrannt."
+        )
+        self.set_status(
+            "Deutsche Auto-Untertitel fertig."
+        )
+
+    def _subtitle_error(self, message):
+        self.busy = False
+        self.subtitle_status.config(
+            text="Auto-Untertitel: Fehler."
+        )
+        self.set_status(
+            "Auto-Untertitel fehlgeschlagen."
+        )
+        messagebox.showerror(
+            "Deutsche Auto-Untertitel",
+            message,
+        )
 
     def generate_voice(self):
         if self.busy:
@@ -1410,6 +1772,10 @@ class App(tk.Tk):
 
         self.generated_audio = path
         self.audio_path = path
+        self.subtitle_path = None
+        self.subtitle_status.config(
+            text="Auto-Untertitel: noch nicht erzeugt."
+        )
 
         self.audio_label.config(
             text="Audio: StefanM.wav"
@@ -1618,7 +1984,7 @@ class App(tk.Tk):
             filetypes=[
                 ("MP4", "*.mp4"),
             ],
-            initialfile="SchlauWutzie_V20_FINAL.mp4",
+            initialfile="SchlauWutzie_V21_7_FINAL.mp4",
         )
 
         if not output:
@@ -1628,7 +1994,7 @@ class App(tk.Tk):
         self.progress["value"] = 0
 
         self.set_status(
-            "V21.5: Intro + Hauptvideo werden gerendert …"
+            "V21.7: Intro + Hauptvideo + deutsche Untertitel werden gerendert …"
         )
 
         threading.Thread(
@@ -1654,13 +2020,45 @@ class App(tk.Tk):
                         ),
                 )
 
+            # Auto-generate German subtitles when the user has not created them yet.
+            if not self.subtitle_path or not Path(self.subtitle_path).exists():
+                def subtitle_status(message):
+                    self.after(
+                        0,
+                        lambda m=message: self.set_status(m),
+                    )
+
+                self.subtitle_path = transcribe_german_to_ass(
+                    self.audio_path,
+                    status_callback=subtitle_status,
+                )
+                self.after(
+                    0,
+                    lambda: self.subtitle_status.config(
+                        text="Auto-Untertitel: Deutsch • fertig • werden beim Export eingebrannt."
+                    ),
+                )
+
             # Render the proven V21.5 main video first.
             temp_main = Path(
                 tempfile.mkstemp(
-                    prefix="schlawutzie_v21_5_main_",
+                    prefix="schlawutzie_v21_7_main_",
                     suffix=".mp4",
                 )[1]
             )
+            temp_intro = Path(
+                tempfile.mkstemp(
+                    prefix="schlawutzie_v21_7_intro_",
+                    suffix=".mp4",
+                )[1]
+            )
+            temp_final = Path(
+                tempfile.mkstemp(
+                    prefix="schlawutzie_v21_7_final_",
+                    suffix=".mp4",
+                )[1]
+            )
+
             try:
                 render_video(
                     self.background_path,
@@ -1669,18 +2067,31 @@ class App(tk.Tk):
                     progress,
                 )
 
-                # Now prepend the fixed 8-second cinematic AI datacenter intro.
+                # Prepend the fixed 8-second cinematic AI datacenter intro.
                 prepend_intro(
                     str(INTRO_VIDEO),
                     str(temp_main),
+                    str(temp_intro),
+                )
+
+                # Burn CapCut-style German subtitles into the complete final video.
+                burn_ass_subtitles(
+                    str(temp_intro),
+                    str(self.subtitle_path),
+                    str(temp_final),
+                )
+
+                shutil.copy2(
+                    temp_final,
                     output,
                 )
             finally:
-                try:
-                    if temp_main.exists():
-                        temp_main.unlink()
-                except OSError:
-                    pass
+                for temporary in (temp_main, temp_intro, temp_final):
+                    try:
+                        if temporary.exists():
+                            temporary.unlink()
+                    except OSError:
+                        pass
 
             output_path = Path(output)
 
@@ -1710,7 +2121,7 @@ class App(tk.Tk):
         self.progress["value"] = 100
 
         self.set_status(
-            "V21.5: Intro + Hauptvideo fertig."
+            "V21.7: Intro + Hauptvideo + deutsche Untertitel fertig."
         )
 
         messagebox.showinfo(
