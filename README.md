@@ -41,3 +41,8 @@ V22.3 intentionally uses CPU mode for consistent behavior on Windows.
 No CTranslate2 or System.Speech is used.
 
 The original V21.5 StefanM/K.I.-bar pipeline and AI-Datacenter intro remain.
+
+
+## Neues Intro
+
+Der bisherige Datacenter-Einspieler wurde durch die neue 8-Sekunden-Version mit `Countdown.m4a` ersetzt. Das neue Intro liegt im Build als `assets/SchlauWutzie_AI_Datacenter_Intro_COUNTDOWN_FINAL.mp4`.
