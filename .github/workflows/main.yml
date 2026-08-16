@@ -1,4 +1,4 @@
-name: Build V21.8 System Speech German Auto-Subtitles
+name: Build V21.8.1 System Speech German Auto-Subtitles
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    name: Build V21.8 System Speech German Auto-Subtitles
+    name: Build V21.8.1 System Speech German Auto-Subtitles
     runs-on: windows-latest
 
     steps:
@@ -43,38 +43,34 @@ jobs:
         run: |
           python -c "import winrt.windows.foundation; import winrt.windows.foundation.collections; import winrt.windows.media.speechsynthesis; import winrt.windows.storage.streams; print('PyWinRT OK')"
 
-      - name: Verify German Windows Speech recognizer
+      - name: Verify System.Speech assembly
         shell: pwsh
         run: |
           Add-Type -AssemblyName System.Speech
-          $recognizers = [System.Speech.Recognition.SpeechRecognitionEngine]::InstalledRecognizers()
-          $de = $recognizers | Where-Object { $_.Culture.Name -eq "de-DE" }
-          if (!$de) {
-            $installed = ($recognizers | ForEach-Object { $_.Name + " (" + $_.Culture.Name + ")" }) -join ", "
-            throw "Kein de-DE Windows-Spracherkenner installiert. Vorhanden: $installed"
-          }
-          Write-Host "de-DE Speech recognizer: $($de.Name)"
+          Write-Host "System.Speech assembly available."
+          Write-Host "NOTE: The GitHub runner may not have a de-DE recognizer."
+          Write-Host "That is a runtime requirement of the user's Windows installation, not a build requirement."
 
       - name: Syntax check
         shell: pwsh
         run: |
           python -m py_compile app.py
 
-      - name: Build V21.8
+      - name: Build V21.8.1
         shell: pwsh
         run: |
           Remove-Item -Recurse -Force -ErrorAction SilentlyContinue build, dist
           python -m PyInstaller --clean --noconfirm SchlauWutzie_V21_8_SYSTEM_SPEECH_DEUTSCHE_AUTO_UNTERTITEL.spec
           $exe = "dist\SchlauWutzie_V21_8_SYSTEM_SPEECH_DEUTSCHE_AUTO_UNTERTITEL.exe"
-          if (!(Test-Path $exe)) { throw "V21.8 EXE wurde nicht erzeugt." }
+          if (!(Test-Path $exe)) { throw "V21.8.1 EXE wurde nicht erzeugt." }
           $size = (Get-Item $exe).Length
-          Write-Host "V21.8 EXE size: $size bytes"
+          Write-Host "V21.8.1 EXE size: $size bytes"
           if ($size -lt 1000000) { throw "EXE ist unerwartet klein." }
 
-      - name: Upload V21.8 artifact
+      - name: Upload V21.8.1 artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SchlauWutzie_V21_8_SYSTEM_SPEECH_DEUTSCHE_AUTO_UNTERTITEL
+          name: SchlauWutzie_V21_8_1_SYSTEM_SPEECH_DEUTSCHE_AUTO_UNTERTITEL
           path: dist/SchlauWutzie_V21_8_SYSTEM_SPEECH_DEUTSCHE_AUTO_UNTERTITEL.exe
           if-no-files-found: error
           retention-days: 14
