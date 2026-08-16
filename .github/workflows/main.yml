@@ -76,7 +76,7 @@ jobs:
         shell: pwsh
         run: |
           Remove-Item -Recurse -Force -ErrorAction SilentlyContinue build, dist
-          python -m PyInstaller --clean --noconfirm Schlawutzie_V21_7_3_FLOAT32_DEUTSCHE_AUTO_UNTERTITEL.spec
+          python -m PyInstaller --clean --noconfirm SchlauWutzie_V21_7_3_FLOAT32_DEUTSCHE_AUTO_UNTERTITEL.spec
           $exe = "dist\SchlauWutzie_V21_7_3_FLOAT32_DEUTSCHE_AUTO_UNTERTITEL.exe"
           if (!(Test-Path $exe)) { throw "V21.7.3 EXE wurde nicht erzeugt." }
           $size = (Get-Item $exe).Length
