@@ -1,4 +1,4 @@
-name: Build V21.7.3 Float32 German Auto-Subtitles
+name: Build V21.8 System Speech German Auto-Subtitles
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    name: Build V21.7.3 Float32 German Auto-Subtitles
+    name: Build V21.8 System Speech German Auto-Subtitles
     runs-on: windows-latest
 
     steps:
@@ -28,7 +28,7 @@ jobs:
         shell: pwsh
         run: |
           if (!(Test-Path "app.py")) { throw "app.py fehlt." }
-          if (!(Test-Path "SchlauWutzie_V21_7_3_FLOAT32_DEUTSCHE_AUTO_UNTERTITEL.spec")) { throw "V21.7.3 SPEC fehlt." }
+          if (!(Test-Path "SchlauWutzie_V21_8_SYSTEM_SPEECH_DEUTSCHE_AUTO_UNTERTITEL.spec")) { throw "V21.8 SPEC fehlt." }
           if (!(Test-Path "assets\schlawutzie.png")) { throw "Hintergrundbild fehlt." }
           if (!(Test-Path "assets\SchlauWutzie_KI_AI_Datacenter_Intro_V4_FINAL.mp4")) { throw "Intro-MP4 fehlt." }
 
@@ -38,54 +38,43 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
-      - name: Download bundled German Whisper model
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force "assets\whisper-base" | Out-Null
-          python -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='Systran/faster-whisper-base', revision='ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66', local_dir='assets/whisper-base', allow_patterns=['config.json','model.bin','tokenizer.json','vocabulary.txt'])"
-
-      - name: Verify bundled model
-        shell: pwsh
-        run: |
-          $required = @(
-            "assets\whisper-base\config.json",
-            "assets\whisper-base\model.bin",
-            "assets\whisper-base\tokenizer.json",
-            "assets\whisper-base\vocabulary.txt"
-          )
-          foreach ($file in $required) {
-            if (!(Test-Path $file)) { throw "Sprachmodell-Datei fehlt: $file" }
-          }
-
-      - name: Verify packages
-        shell: pwsh
-        run: |
-          python -c "import faster_whisper; import ctranslate2; import huggingface_hub; print('faster-whisper OK'); print('ctranslate2 OK'); print('huggingface_hub OK')"
-
-      - name: Verify PyWinRT
+      - name: Verify PyWinRT for StefanM
         shell: pwsh
         run: |
           python -c "import winrt.windows.foundation; import winrt.windows.foundation.collections; import winrt.windows.media.speechsynthesis; import winrt.windows.storage.streams; print('PyWinRT OK')"
+
+      - name: Verify German Windows Speech recognizer
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Speech
+          $recognizers = [System.Speech.Recognition.SpeechRecognitionEngine]::InstalledRecognizers()
+          $de = $recognizers | Where-Object { $_.Culture.Name -eq "de-DE" }
+          if (!$de) {
+            $installed = ($recognizers | ForEach-Object { $_.Name + " (" + $_.Culture.Name + ")" }) -join ", "
+            throw "Kein de-DE Windows-Spracherkenner installiert. Vorhanden: $installed"
+          }
+          Write-Host "de-DE Speech recognizer: $($de.Name)"
 
       - name: Syntax check
         shell: pwsh
         run: |
           python -m py_compile app.py
 
-      - name: Build V21.7.3
+      - name: Build V21.8
         shell: pwsh
         run: |
           Remove-Item -Recurse -Force -ErrorAction SilentlyContinue build, dist
-          python -m PyInstaller --clean --noconfirm SchlauWutzie_V21_7_3_FLOAT32_DEUTSCHE_AUTO_UNTERTITEL.spec
-          $exe = "dist\SchlauWutzie_V21_7_3_FLOAT32_DEUTSCHE_AUTO_UNTERTITEL.exe"
-          if (!(Test-Path $exe)) { throw "V21.7.3 EXE wurde nicht erzeugt." }
+          python -m PyInstaller --clean --noconfirm SchlauWutzie_V21_8_SYSTEM_SPEECH_DEUTSCHE_AUTO_UNTERTITEL.spec
+          $exe = "dist\SchlauWutzie_V21_8_SYSTEM_SPEECH_DEUTSCHE_AUTO_UNTERTITEL.exe"
+          if (!(Test-Path $exe)) { throw "V21.8 EXE wurde nicht erzeugt." }
           $size = (Get-Item $exe).Length
+          Write-Host "V21.8 EXE size: $size bytes"
           if ($size -lt 1000000) { throw "EXE ist unerwartet klein." }
 
-      - name: Upload V21.7.3 artifact
+      - name: Upload V21.8 artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SchlauWutzie_V21_7_3_FLOAT32_DEUTSCHE_AUTO_UNTERTITEL
-          path: dist/SchlauWutzie_V21_7_3_FLOAT32_DEUTSCHE_AUTO_UNTERTITEL.exe
+          name: SchlauWutzie_V21_8_SYSTEM_SPEECH_DEUTSCHE_AUTO_UNTERTITEL
+          path: dist/SchlauWutzie_V21_8_SYSTEM_SPEECH_DEUTSCHE_AUTO_UNTERTITEL.exe
           if-no-files-found: error
           retention-days: 14
