@@ -1,1 +1,80 @@
+name: Build V21.8 System Speech German Auto-Subtitles
 
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build V21.8 System Speech German Auto-Subtitles
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Python 3.13 x64
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          architecture: x64
+          cache: pip
+
+      - name: Verify base project
+        shell: pwsh
+        run: |
+          if (!(Test-Path "app.py")) { throw "app.py fehlt." }
+          if (!(Test-Path "SchlauWutzie_V21_8_SYSTEM_SPEECH_DEUTSCHE_AUTO_UNTERTITEL.spec")) { throw "V21.8 SPEC fehlt." }
+          if (!(Test-Path "assets\schlawutzie.png")) { throw "Hintergrundbild fehlt." }
+          if (!(Test-Path "assets\SchlauWutzie_KI_AI_Datacenter_Intro_V4_FINAL.mp4")) { throw "Intro-MP4 fehlt." }
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Verify PyWinRT for StefanM
+        shell: pwsh
+        run: |
+          python -c "import winrt.windows.foundation; import winrt.windows.foundation.collections; import winrt.windows.media.speechsynthesis; import winrt.windows.storage.streams; print('PyWinRT OK')"
+
+      - name: Verify German Windows Speech recognizer
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Speech
+          $recognizers = [System.Speech.Recognition.SpeechRecognitionEngine]::InstalledRecognizers()
+          $de = $recognizers | Where-Object { $_.Culture.Name -eq "de-DE" }
+          if (!$de) {
+            $installed = ($recognizers | ForEach-Object { $_.Name + " (" + $_.Culture.Name + ")" }) -join ", "
+            throw "Kein de-DE Windows-Spracherkenner installiert. Vorhanden: $installed"
+          }
+          Write-Host "de-DE Speech recognizer: $($de.Name)"
+
+      - name: Syntax check
+        shell: pwsh
+        run: |
+          python -m py_compile app.py
+
+      - name: Build V21.8
+        shell: pwsh
+        run: |
+          Remove-Item -Recurse -Force -ErrorAction SilentlyContinue build, dist
+          python -m PyInstaller --clean --noconfirm SchlauWutzie_V21_8_SYSTEM_SPEECH_DEUTSCHE_AUTO_UNTERTITEL.spec
+          $exe = "dist\SchlauWutzie_V21_8_SYSTEM_SPEECH_DEUTSCHE_AUTO_UNTERTITEL.exe"
+          if (!(Test-Path $exe)) { throw "V21.8 EXE wurde nicht erzeugt." }
+          $size = (Get-Item $exe).Length
+          Write-Host "V21.8 EXE size: $size bytes"
+          if ($size -lt 1000000) { throw "EXE ist unerwartet klein." }
+
+      - name: Upload V21.8 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SchlauWutzie_V21_8_SYSTEM_SPEECH_DEUTSCHE_AUTO_UNTERTITEL
+          path: dist/SchlauWutzie_V21_8_SYSTEM_SPEECH_DEUTSCHE_AUTO_UNTERTITEL.exe
+          if-no-files-found: error
+          retention-days: 14
