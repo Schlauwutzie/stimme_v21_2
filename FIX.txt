@@ -1,0 +1,1 @@
+V22.3 subtitle engine preserved; only the intro asset was replaced. Build guards verify transcribe_german_to_ass + burn_ass_subtitles before EXE build.

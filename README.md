@@ -42,7 +42,11 @@ No CTranslate2 or System.Speech is used.
 
 The original V21.5 StefanM/K.I.-bar pipeline and AI-Datacenter intro remain.
 
+## Countdown-Intro Update
 
-## Neues Intro
+The V22.3 subtitle/transcription engine is intentionally unchanged.
+Only the 8-second AI-Datacenter intro asset was replaced by
+`assets/SchlauWutzie_AI_Datacenter_Intro_COUNTDOWN_FINAL.mp4`.
 
-Der bisherige Datacenter-Einspieler wurde durch die neue 8-Sekunden-Version mit `Countdown.m4a` ersetzt. Das neue Intro liegt im Build als `assets/SchlauWutzie_AI_Datacenter_Intro_COUNTDOWN_FINAL.mp4`.
+The GitHub build now explicitly verifies that the subtitle engine and
+subtitle burn-in call are present before building the EXE.
