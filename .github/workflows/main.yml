@@ -1,4 +1,4 @@
-name: Build V22 FINAL – Whisper.cpp German Auto-Subtitles
+name: Build V22 FINAL – stable V21.5 core + whisper.cpp subtitles
 
 on:
   push:
@@ -24,7 +24,7 @@ jobs:
           architecture: x64
           cache: pip
 
-      - name: Verify base project
+      - name: Verify project
         shell: pwsh
         run: |
           if (!(Test-Path "app.py")) { throw "app.py fehlt." }
@@ -32,62 +32,49 @@ jobs:
           if (!(Test-Path "assets\schlawutzie.png")) { throw "Hintergrundbild fehlt." }
           if (!(Test-Path "assets\SchlauWutzie_KI_AI_Datacenter_Intro_V4_FINAL.mp4")) { throw "Intro-MP4 fehlt." }
 
-      - name: Install Python build helpers
+      - name: Install build dependencies
         shell: pwsh
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
-      - name: Download official whisper.cpp v1.9.1 Windows x64 runtime
+      - name: Verify PyWinRT
+        shell: pwsh
+        run: |
+          python -c "import winrt.windows.foundation; import winrt.windows.foundation.collections; import winrt.windows.media.speechsynthesis; import winrt.windows.storage.streams; print('PyWinRT OK')"
+
+      - name: Download whisper.cpp v1.9.1 Windows x64 runtime
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force "whisper_runtime" | Out-Null
-          curl.exe -L --fail `
-            -o "whisper-bin-x64.zip" `
-            "https://github.com/ggml-org/whisper.cpp/releases/download/v1.9.1/whisper-bin-x64.zip"
+          curl.exe -L --fail -o "whisper-bin-x64.zip" "https://github.com/ggml-org/whisper.cpp/releases/download/v1.9.1/whisper-bin-x64.zip"
           Expand-Archive -Force "whisper-bin-x64.zip" "whisper_runtime_unpack"
           $cli = Get-ChildItem -Path "whisper_runtime_unpack" -Filter "whisper-cli.exe" -Recurse | Select-Object -First 1
-          if (!$cli) { throw "whisper-cli.exe wurde im offiziellen v1.9.1 Paket nicht gefunden." }
-          Copy-Item -Recurse -Force `
-            (Join-Path $cli.Directory.FullName "*") `
-            "whisper_runtime\"
+          if (!$cli) { throw "whisper-cli.exe wurde im offiziellen Paket nicht gefunden." }
+          Copy-Item -Recurse -Force (Join-Path $cli.Directory.FullName "*") "whisper_runtime\"
           if (!(Test-Path "whisper_runtime\whisper-cli.exe")) { throw "whisper-cli.exe fehlt." }
           & "whisper_runtime\whisper-cli.exe" --help | Select-Object -First 5
 
-      - name: Download multilingual German-capable Whisper small q5_1 model
+      - name: Download whisper small q5_1 model
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force "whisper_models" | Out-Null
-          curl.exe -L --fail `
-            -o "whisper_models\ggml-small-q5_1.bin" `
-            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small-q5_1.bin?download=true"
+          curl.exe -L --fail -o "whisper_models\ggml-small-q5_1.bin" "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small-q5_1.bin?download=true"
 
-      - name: Verify model SHA256
+      - name: Verify Whisper model SHA256
         shell: pwsh
         run: |
           $hash = (Get-FileHash "whisper_models\ggml-small-q5_1.bin" -Algorithm SHA256).Hash.ToLower()
           $expected = "ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb"
-          if ($hash -ne $expected) {
-            throw "Whisper-Modell SHA256 stimmt nicht. Erwartet: $expected / Ist: $hash"
-          }
+          if ($hash -ne $expected) { throw "Whisper-Modell SHA256 stimmt nicht." }
           Write-Host "Whisper model SHA256 OK."
 
-      - name: Smoke-test whisper.cpp model
+      - name: Whisper CLI smoke test
         shell: pwsh
         run: |
-          python -c "import wave, struct; wf=wave.open('smoke.wav','wb'); wf.setnchannels(1); wf.setsampwidth(2); wf.setframerate(16000); wf.writeframes(struct.pack('<h',0)*16000); wf.close()"
-          & "whisper_runtime\whisper-cli.exe" `
-            -m "whisper_models\ggml-small-q5_1.bin" `
-            -f "smoke.wav" `
-            -l de `
-            -p 1 `
-            -t 4 `
-            -ml 1 `
-            -oj `
-            -of "smoke" `
-            -np `
-            --no-fallback
-          if (!(Test-Path "smoke.json")) { throw "whisper.cpp Smoke-Test hat keine JSON-Ausgabe erzeugt." }
+          python -c "import wave, struct; w=wave.open('smoke.wav','wb'); w.setnchannels(1); w.setsampwidth(2); w.setframerate(16000); w.writeframes(struct.pack('<h',0)*16000); w.close()"
+          & "whisper_runtime\whisper-cli.exe" -m "whisper_models\ggml-small-q5_1.bin" -f "smoke.wav" -l de -t 4 -p 1 -ml 1 -sow -oj -of "smoke" -np -nf
+          if (!(Test-Path "smoke.json")) { throw "Whisper Smoke-Test fehlgeschlagen." }
 
       - name: Syntax check
         shell: pwsh
@@ -102,8 +89,8 @@ jobs:
           $exe = "dist\SchlauWutzie_V22_FINAL.exe"
           if (!(Test-Path $exe)) { throw "V22 EXE wurde nicht erzeugt." }
           $size = (Get-Item $exe).Length
+          if ($size -lt 150000000) { throw "V22 EXE ist verdächtig klein; Runtime oder Modell fehlen." }
           Write-Host "V22 EXE size: $size bytes"
-          if ($size -lt 150000000) { throw "V22 EXE ist unerwartet klein; Whisper-Modell könnte fehlen." }
 
       - name: Upload V22 artifact
         uses: actions/upload-artifact@v4
