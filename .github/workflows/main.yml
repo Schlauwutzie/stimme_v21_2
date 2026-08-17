@@ -52,7 +52,7 @@ jobs:
       - name: Verify Faster-Whisper engine
         shell: pwsh
         run: |
-          python -c "from faster_whisper import WhisperModel; import ctranslate2; print('faster-whisper OK'); print('ctranslate2', ctranslate2.__version__)"
+          python -c "import requests; from faster_whisper import WhisperModel; import ctranslate2; print('requests OK', requests.__version__); print('faster-whisper OK'); print('ctranslate2', ctranslate2.__version__)"
 
       - name: Syntax check
         shell: pwsh
