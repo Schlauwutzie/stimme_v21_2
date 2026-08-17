@@ -1,1 +1,0 @@
-V22.5: replaced whisper.cpp DTW subtitle engine with faster-whisper large-v3-turbo word timestamps + VAD + anti-repetition strategy. Perfekt-basis intro/audio/UI retained.
