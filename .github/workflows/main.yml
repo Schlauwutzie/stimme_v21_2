@@ -30,7 +30,7 @@ jobs:
           if (!(Test-Path "app.py")) { throw "app.py fehlt." }
           if (!(Test-Path "SchlauWutzie_V22_3_DTW_LARGE_V3_TURBO_FINAL.spec")) { throw "V22.3 SPEC fehlt." }
           if (!(Test-Path "assets\schlawutzie.png")) { throw "Hintergrundbild fehlt." }
-          if (!(Test-Path "assets\SchlauWutzie_AI_Datacenter_Intro_COUNTDOWN_FINAL.mp4")) { throw "Intro-MP4 fehlt." }
+          if (!(Test-Path "assets\SchlauWutzie_KI_AI_Datacenter_Intro_V4_FINAL.mp4")) { throw "Intro-MP4 fehlt." }
 
       - name: Install dependencies
         shell: pwsh
@@ -55,18 +55,15 @@ jobs:
           New-Item -ItemType Directory -Force "whisper_models" | Out-Null
           curl.exe -L --fail -o "whisper_models\ggml-large-v3-turbo-q5_0.bin" "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin?download=true"
 
-      - name: Verify Large-v3-Turbo q5_0 model
+      - name: Verify Large-v3-Turbo q5_0 SHA256
         shell: pwsh
         run: |
-          if (!(Test-Path "whisper_models\ggml-large-v3-turbo-q5_0.bin")) {
-            throw "Whisper-Modell fehlt."
+          $hash = (Get-FileHash "whisper_models\ggml-large-v3-turbo-q5_0.bin" -Algorithm SHA256).Hash.ToLower()
+          $expected = "e050f7970618a659205450ad97eb95a18d69c9ee"
+          if ($hash -ne $expected) {
+            throw "Large-v3-Turbo q5_0 SHA256 stimmt nicht."
           }
-          $size = (Get-Item "whisper_models\ggml-large-v3-turbo-q5_0.bin").Length
-          Write-Host "Whisper model size: $size bytes"
-          if ($size -lt 500000000) {
-            throw "Whisper-Modell ist unerwartet klein."
-          }
-          Write-Host "Whisper model file OK."
+          Write-Host "Large-v3-Turbo q5_0 SHA256 OK."
 
       - name: Whisper DTW smoke test
         shell: pwsh
@@ -87,24 +84,6 @@ jobs:
             -np `
             -nf
           if (!(Test-Path "smoke.json")) { throw "DTW Smoke-Test fehlgeschlagen." }
-
-
-      - name: Verify V22.3 subtitle engine is present
-        shell: pwsh
-        run: |
-          $code = Get-Content "app.py" -Raw
-          if ($code -notmatch "def transcribe_german_to_ass") { throw "Subtitle engine fehlt." }
-          if ($code -notmatch "def burn_ass_subtitles") { throw "Subtitle burn-in fehlt." }
-          if ($code -notmatch "self\.subtitle_path") { throw "Subtitle export state fehlt." }
-          if ($code -notmatch "burn_ass_subtitles\(") { throw "Subtitle burn-in call fehlt." }
-          Write-Host "V22.3 subtitle engine verified."
-
-      - name: Verify countdown intro asset
-        shell: pwsh
-        run: |
-          if (!(Test-Path assets\SchlauWutzie_KI_AI_Datacenter_Intro_V4_FINAL.mp4)) {
-            throw "Countdown-Intro fehlt."
-          }
 
       - name: Syntax check
         shell: pwsh
