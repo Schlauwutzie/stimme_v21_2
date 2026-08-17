@@ -85,6 +85,11 @@ jobs:
             -nf
           if (!(Test-Path "smoke.json")) { throw "DTW Smoke-Test fehlgeschlagen." }
 
+      - name: Subtitle timing self-test
+        shell: pwsh
+        run: |
+          python subtitle_timing_selftest.py
+
       - name: Syntax check
         shell: pwsh
         run: |
