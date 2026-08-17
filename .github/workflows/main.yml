@@ -1,4 +1,4 @@
-name: Build V22.5 EXTERNAL MODEL FINAL
+name: Build V22.6 FINAL – Faster-Whisper + New Intro
 
 on:
   workflow_dispatch:
@@ -8,77 +8,88 @@ permissions:
 
 jobs:
   build:
+    name: Build V22.6 FINAL
     runs-on: windows-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-
-      - name: Python 3.13 x64
+      - name: Python 3.12 x64
         uses: actions/setup-python@v6
         with:
-          python-version: "3.13"
+          python-version: "3.12"
           architecture: x64
           cache: pip
-
-      - name: Verify project
+      - name: Verify source
         shell: pwsh
         run: |
           if (!(Test-Path "app.py")) { throw "app.py fehlt." }
-          if (!(Test-Path "SchlauWutzie_V22_5_EXTERNAL_MODEL_FINAL.spec")) { throw "SPEC fehlt." }
+          if (!(Test-Path "SchlauWutzie_V22_6_FINAL.spec")) { throw "SPEC fehlt." }
           if (!(Test-Path "assets\schlawutzie.png")) { throw "Bild fehlt." }
-          if (!(Test-Path "assets\SchlauWutzie_KI_AI_Datacenter_Intro_V4_FINAL.mp4")) { throw "Intro fehlt." }
-
+          if (!(Test-Path "assets\SchlauWutzie_NEW_INTRO_COUNTDOWN_FINAL.mp4")) { throw "Neues Intro fehlt." }
       - name: Install dependencies
         shell: pwsh
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
-
-      - name: Download Faster-Whisper model externally
+      - name: Download Faster-Whisper model
+        shell: pwsh
+        env:
+          HF_HUB_DISABLE_PROGRESS_BARS: "1"
+        run: |
+          $modelDir = Join-Path (Get-Location) "models\faster-whisper-large-v3-turbo"
+          New-Item -ItemType Directory -Force $modelDir | Out-Null
+          $env:FINAL_MODEL_DIR = $modelDir
+          python -c "import os; from huggingface_hub import snapshot_download; snapshot_download(repo_id='mobiuslabsgmbh/faster-whisper-large-v3-turbo', local_dir=os.environ['FINAL_MODEL_DIR'], allow_patterns=['config.json','preprocessor_config.json','model.bin','tokenizer.json','vocabulary.*'])"
+      - name: Verify model files
         shell: pwsh
         run: |
-          python -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='mobiuslabsgmbh/faster-whisper-large-v3-turbo', local_dir='models\faster-whisper-large-v3-turbo')"
-
-      - name: Verify external model
+          $model = "models\faster-whisper-large-v3-turbo"
+          foreach ($file in @("config.json","preprocessor_config.json","model.bin","tokenizer.json")) { if (!(Test-Path (Join-Path $model $file))) { throw "Modell-Datei fehlt: $file" } }
+          $size = (Get-Item (Join-Path $model "model.bin")).Length
+          Write-Host "model.bin: $size bytes"
+          if ($size -lt 500000000) { throw "model.bin ist unerwartet klein." }
+      - name: Verify runtime and load model
         shell: pwsh
         run: |
-          if (!(Test-Path "models\faster-whisper-large-v3-turbo\model.bin")) { throw "model.bin fehlt." }
-          if (!(Test-Path "models\faster-whisper-large-v3-turbo\config.json")) { throw "config.json fehlt." }
-          if (!(Test-Path "models\faster-whisper-large-v3-turbo\tokenizer.json")) { throw "tokenizer.json fehlt." }
-          $size = (Get-Item "models\faster-whisper-large-v3-turbo\model.bin").Length
-          Write-Host "Model size: $size bytes"
-          if ($size -lt 500000000) { throw "Modell zu klein." }
-
-      - name: Verify Faster-Whisper
-        shell: pwsh
-        run: |
-          python -c "import requests; from faster_whisper import WhisperModel; import ctranslate2; print('requests', requests.__version__); print('faster-whisper OK'); print('ctranslate2', ctranslate2.__version__)"
-
+          python -c "import requests, ctranslate2; from faster_whisper import WhisperModel; print('requests', requests.__version__); print('ctranslate2', ctranslate2.__version__); m=WhisperModel('models/faster-whisper-large-v3-turbo', device='cpu', compute_type='int8', cpu_threads=2, num_workers=1, local_files_only=True); print('FASTER-WHISPER MODEL LOAD OK')"
       - name: Syntax check
         shell: pwsh
         run: |
           python -m py_compile app.py
-
-      - name: Build
+      - name: Subtitle engine check
+        shell: pwsh
+        run: |
+          $code = Get-Content "app.py" -Raw
+          foreach ($needle in @("word_timestamps=True","condition_on_previous_text=False","vad_filter=True","no_repeat_ngram_size","def burn_ass_subtitles")) { if ($code -notmatch [regex]::Escape($needle)) { throw "Subtitle-Merkmal fehlt: $needle" } }
+      - name: Build V22.6
         shell: pwsh
         run: |
           Remove-Item -Recurse -Force -ErrorAction SilentlyContinue build, dist
-          python -m PyInstaller --clean --noconfirm SchlauWutzie_V22_5_EXTERNAL_MODEL_FINAL.spec
-          $exe = "dist\SchlauWutzie_V22_5_EXTERNAL_MODEL_FINAL.exe"
-          if (!(Test-Path $exe)) { throw "EXE wurde nicht erzeugt." }
+          python -m PyInstaller --clean --noconfirm SchlauWutzie_V22_6_FINAL.spec
+          $exe = "dist\SchlauWutzie_V22_6_FINAL.exe"
+          if (!(Test-Path $exe)) { throw "EXE fehlt." }
           $size = (Get-Item $exe).Length
           if ($size -lt 100000000) { throw "EXE ist verdächtig klein." }
-          New-Item -ItemType Directory -Force "dist\SchlauWutzie_V22_5_EXTERNAL_MODEL_FINAL\models" | Out-Null
-          Copy-Item -Recurse -Force "models\faster-whisper-large-v3-turbo" "dist\SchlauWutzie_V22_5_EXTERNAL_MODEL_FINAL\models\"
-          Copy-Item "$exe" "dist\SchlauWutzie_V22_5_EXTERNAL_MODEL_FINAL\"
-          Compress-Archive -Path "dist\SchlauWutzie_V22_5_EXTERNAL_MODEL_FINAL\*" -DestinationPath "dist\SchlauWutzie_V22_5_EXTERNAL_MODEL_FINAL-Windows-x64.zip" -Force
-          Write-Host "EXE size: $size bytes"
+      - name: Assemble final distribution
+        shell: pwsh
+        run: |
+          $dist = "dist\SchlauWutzie_V22_6_FINAL"
+          New-Item -ItemType Directory -Force $dist | Out-Null
+          Copy-Item "dist\SchlauWutzie_V22_6_FINAL.exe" $dist
+          New-Item -ItemType Directory -Force "$dist\models" | Out-Null
+          Copy-Item -Recurse -Force "models\faster-whisper-large-v3-turbo" "$dist\models\"
+          @"
+          SchlauWutzie Video Studio V22.6 FINAL
 
-      - name: Upload EXE package
+          Start the EXE from this folder.
+          Keep the models folder beside the EXE.
+          The AI model is intentionally outside the EXE.
+          "@ | Set-Content "$dist\README_START.txt" -Encoding UTF8
+          Compress-Archive -Path "$dist\*" -DestinationPath "dist\SchlauWutzie_V22_6_FINAL-Windows-x64.zip" -Force
+      - name: Upload final package
         uses: actions/upload-artifact@v4
         with:
-          name: SchlauWutzie_V22_5_EXTERNAL_MODEL_FINAL-Windows-x64
-          path: dist/SchlauWutzie_V22_5_EXTERNAL_MODEL_FINAL-Windows-x64.zip
+          name: SchlauWutzie_V22_6_FINAL-Windows-x64
+          path: dist/SchlauWutzie_V22_6_FINAL-Windows-x64.zip
           if-no-files-found: error
           retention-days: 14
