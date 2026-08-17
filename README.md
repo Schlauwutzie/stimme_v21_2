@@ -41,12 +41,3 @@ V22.3 intentionally uses CPU mode for consistent behavior on Windows.
 No CTranslate2 or System.Speech is used.
 
 The original V21.5 StefanM/K.I.-bar pipeline and AI-Datacenter intro remain.
-
-## Countdown-Intro Update
-
-The V22.3 subtitle/transcription engine is intentionally unchanged.
-Only the 8-second AI-Datacenter intro asset was replaced by
-`assets/SchlauWutzie_AI_Datacenter_Intro_COUNTDOWN_FINAL.mp4`.
-
-The GitHub build now explicitly verifies that the subtitle engine and
-subtitle burn-in call are present before building the EXE.

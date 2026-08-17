@@ -1,0 +1,6 @@
+V22.3 GOLD WORKING BACKUP
+
+This is the known-working V22.3 baseline.
+DO NOT MODIFY app.py, SPEC, workflow, requirements, or subtitle engine.
+
+Use this archive to restore the working version at any time.
