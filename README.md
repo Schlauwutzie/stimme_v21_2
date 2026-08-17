@@ -1,22 +1,24 @@
-# V22.5 External Model FINAL
+# SchlauWutzie K.I. – Video Studio V22.6 FINAL
 
-The 1.62 GB Faster-Whisper model is NOT bundled inside the EXE.
+Basis ist die von dir gelieferte SchlauWutzie_Perfekt.zip.
 
-Folder layout:
+Neu:
+- neues 8-Sekunden-Datacenter-Intro mit Countdown-Sound
+- Faster-Whisper large-v3-turbo
+- native Word-Timestamps
+- VAD
+- condition_on_previous_text=False
+- Wiederholungs-Erkennung mit zweitem Durchlauf
+- gelbe Karaoke-Wort-Hervorhebung
 
-SchlauWutzie_V22_5_EXTERNAL_MODEL_FINAL.exe
-models/
-  faster-whisper-large-v3-turbo/
-    config.json
-    model.bin
-    preprocessor_config.json
-    tokenizer.json
-    vocabulary.json
+Beibehalten:
+- StefanM / Microsoft OneCore
+- K.I.-Waveform
+- 9:16 TikTok-Export
+- MP4-Export / Subtitle Burn-In
 
-The model is loaded with `local_files_only=True` from the folder next
-to the EXE. This avoids the huge PyInstaller one-file extraction and
-makes the actual model-loading failure visible.
+Das Modell liegt bewusst außerhalb der EXE in:
+models/faster-whisper-large-v3-turbo
 
-The Faster-Whisper large-v3-turbo model repository is about 1.62 GB.
-Its files include model.bin, config.json, preprocessor_config.json,
-tokenizer.json and vocabulary.json. citeturn373741search0turn373741search1
+Faster-Whisper unterstützt native Word-Timestamps und lokale Modelle; VAD und
+condition_on_previous_text sind dokumentierte Transkriptionsoptionen.

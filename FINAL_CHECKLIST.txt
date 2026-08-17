@@ -1,0 +1,1 @@
+Perfekt-Basis + neues Intro + Faster-Whisper Word-Timestamps + VAD + Anti-Repetition; Modell extern neben EXE.
