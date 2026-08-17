@@ -1,1 +1,0 @@
-V22.4: CapCut-like word timing via whisper.cpp word-split segments; original Perfekt basis and intro retained.
