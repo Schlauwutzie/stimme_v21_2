@@ -1,8 +1,6 @@
-name: Build V22.4 FINAL – CapCut-style German subtitles
+name: Build V22.5 FINAL – Faster-Whisper German subtitles
 
 on:
-  push:
-    branches: ["main"]
   workflow_dispatch:
 
 permissions:
@@ -10,6 +8,7 @@ permissions:
 
 jobs:
   build:
+    name: Build V22.5 FINAL
     runs-on: windows-latest
 
     steps:
@@ -27,7 +26,7 @@ jobs:
         shell: pwsh
         run: |
           if (!(Test-Path "app.py")) { throw "app.py fehlt." }
-          if (!(Test-Path "SchlauWutzie_V22_4_CAPCUT_STYLE_SUBTITEL_FINAL.spec")) { throw "SPEC fehlt." }
+          if (!(Test-Path "SchlauWutzie_V22_5_FINAL_FASTER_WHISPER.spec")) { throw "V22.5 SPEC fehlt." }
           if (!(Test-Path "assets\schlawutzie.png")) { throw "Bild fehlt." }
           if (!(Test-Path "assets\SchlauWutzie_KI_AI_Datacenter_Intro_V4_FINAL.mp4")) { throw "Intro fehlt." }
 
@@ -37,65 +36,50 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
-      - name: Download whisper.cpp v1.9.1 Windows x64 runtime
+      - name: Download Faster-Whisper large-v3-turbo model
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force "whisper_runtime" | Out-Null
-          curl.exe -L --fail -o "whisper-bin-x64.zip" "https://github.com/ggml-org/whisper.cpp/releases/download/v1.9.1/whisper-bin-x64.zip"
-          Expand-Archive -Force "whisper-bin-x64.zip" "whisper_runtime_unpack"
-          $cli = Get-ChildItem -Path "whisper_runtime_unpack" -Filter "whisper-cli.exe" -Recurse | Select-Object -First 1
-          if (!$cli) { throw "whisper-cli.exe fehlt." }
-          Copy-Item -Recurse -Force (Join-Path $cli.Directory.FullName "*") "whisper_runtime\"
-          if (!(Test-Path "whisper_runtime\whisper-cli.exe")) { throw "whisper-cli.exe fehlt." }
-
-      - name: Download Large-v3-Turbo q5_0 model
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force "whisper_models" | Out-Null
-          curl.exe -L --fail -o "whisper_models\ggml-large-v3-turbo-q5_0.bin" "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin?download=true"
+          python -c "from huggingface_hub import snapshot_download; snapshot_download(repo_id='mobiuslabsgmbh/faster-whisper-large-v3-turbo', local_dir='models/faster-whisper-large-v3-turbo', allow_patterns=['config.json','preprocessor_config.json','model.bin','tokenizer.json','vocabulary.*'])"
 
       - name: Verify model
         shell: pwsh
         run: |
-          if (!(Test-Path "whisper_models\ggml-large-v3-turbo-q5_0.bin")) { throw "Whisper-Modell fehlt." }
-          $size = (Get-Item "whisper_models\ggml-large-v3-turbo-q5_0.bin").Length
-          if ($size -lt 500000000) { throw "Whisper-Modell ist unerwartet klein." }
-          Write-Host "Whisper model: $size bytes"
+          if (!(Test-Path "models\faster-whisper-large-v3-turbo\model.bin")) { throw "Faster-Whisper Modell fehlt." }
+          $size = (Get-Item "models\faster-whisper-large-v3-turbo\model.bin").Length
+          Write-Host "Faster-Whisper model.bin: $size bytes"
+          if ($size -lt 500000000) { throw "Faster-Whisper Modell ist unerwartet klein." }
 
-      - name: Verify subtitle engine
+      - name: Verify Faster-Whisper engine
         shell: pwsh
         run: |
-          $code = Get-Content "app.py" -Raw
-          if ($code -notmatch "def _v23_words_from_full_json") { throw "Wortzeit-Parser fehlt." }
-          if ($code -notmatch '"-ml"') { throw "Word split fehlt." }
-          if ($code -notmatch '"-sow"') { throw "Split-on-word fehlt." }
-          if ($code -notmatch "def burn_ass_subtitles") { throw "Burn-in fehlt." }
+          python -c "from faster_whisper import WhisperModel; import ctranslate2; print('faster-whisper OK'); print('ctranslate2', ctranslate2.__version__)"
 
       - name: Syntax check
         shell: pwsh
         run: |
           python -m py_compile app.py
 
-      - name: Whisper smoke test
+      - name: ASR smoke test
         shell: pwsh
         run: |
           python -c "import wave, struct; w=wave.open('smoke.wav','wb'); w.setnchannels(1); w.setsampwidth(2); w.setframerate(16000); w.writeframes(struct.pack('<h',0)*32000); w.close()"
-          & "whisper_runtime\whisper-cli.exe" -m "whisper_models\ggml-large-v3-turbo-q5_0.bin" -f "smoke.wav" -l de -ng -t 4 -p 1 -bs 2 -bo 2 -wt 0.01 -ml 1 -sow -ojf -of smoke -np -nf
-          if (!(Test-Path "smoke.json")) { throw "Whisper Smoke-Test fehlgeschlagen." }
+          python -c "from faster_whisper import WhisperModel; m=WhisperModel('models/faster-whisper-large-v3-turbo', device='cpu', compute_type='int8', cpu_threads=4, num_workers=1); s,i=m.transcribe('smoke.wav', language='de', word_timestamps=True, condition_on_previous_text=False, vad_filter=True); print(list(s)); print('SMOKE OK')"
 
-      - name: Build V22.4
+      - name: Build V22.5
         shell: pwsh
         run: |
           Remove-Item -Recurse -Force -ErrorAction SilentlyContinue build, dist
-          python -m PyInstaller --clean --noconfirm SchlauWutzie_V22_4_CAPCUT_STYLE_SUBTITEL_FINAL.spec
-          $exe = "dist\SchlauWutzie_V22_4_CAPCUT_STYLE_SUBTITEL_FINAL.exe"
-          if (!(Test-Path $exe)) { throw "V22.4 EXE wurde nicht erzeugt." }
-          if ((Get-Item $exe).Length -lt 500000000) { throw "EXE ist verdächtig klein." }
+          python -m PyInstaller --clean --noconfirm SchlauWutzie_V22_5_FINAL_FASTER_WHISPER.spec
+          $exe = "dist\SchlauWutzie_V22_5_FINAL_FASTER_WHISPER.exe"
+          if (!(Test-Path $exe)) { throw "V22.5 EXE wurde nicht erzeugt." }
+          $size = (Get-Item $exe).Length
+          if ($size -lt 500000000) { throw "V22.5 EXE ist verdächtig klein." }
+          Write-Host "V22.5 EXE size: $size bytes"
 
-      - name: Upload V22.4 artifact
+      - name: Upload V22.5 artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SchlauWutzie_V22_4_CAPCUT_STYLE_SUBTITEL_FINAL-Windows-x64
-          path: dist/SchlauWutzie_V22_4_CAPCUT_STYLE_SUBTITEL_FINAL.exe
+          name: SchlauWutzie_V22_5_FINAL_FASTER_WHISPER-Windows-x64
+          path: dist/SchlauWutzie_V22_5_FINAL_FASTER_WHISPER.exe
           if-no-files-found: error
           retention-days: 14
