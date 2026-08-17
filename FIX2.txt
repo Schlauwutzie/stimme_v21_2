@@ -1,0 +1,1 @@
+V22.5 build fix: explicitly install requests, which faster-whisper.utils imports. No changes to app.py or subtitle logic.
