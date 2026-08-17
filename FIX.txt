@@ -1,1 +1,0 @@
-V22.5 external model fix: the 1.62 GB model is no longer bundled into the EXE. The EXE loads it from models/faster-whisper-large-v3-turbo beside the EXE. Model load exceptions now include the exact path and underlying error.
