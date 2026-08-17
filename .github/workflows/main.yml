@@ -102,7 +102,7 @@ jobs:
       - name: Verify countdown intro asset
         shell: pwsh
         run: |
-          if (!(Test-Path "assets\SchlauWutzie_AI_Datacenter_Intro_COUNTDOWN_FINAL.mp4")) {
+          if (!(Test-Path assets\SchlauWutzie_KI_AI_Datacenter_Intro_V4_FINAL.mp4)) {
             throw "Countdown-Intro fehlt."
           }
 
